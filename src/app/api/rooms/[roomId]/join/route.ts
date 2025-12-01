@@ -151,7 +151,7 @@ export async function POST(
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    log.success({
+    log.info("Player joined successfully", {
       roomId,
       playerId: player.id,
       sessionId,

@@ -7,32 +7,32 @@ interface CardProps {
 export function Card({ card, faceDown = false, size = "md" }: CardProps) {
   const sizeConfig = {
     sm: {
-      container: "w-12 h-16",
+      container: "w-10 sm:w-12 h-14 sm:h-16",
       cornerRank: "text-xs",
       cornerSuit: "text-sm",
-      centerSuit: "text-2xl",
-      backIcon: "text-xl",
+      centerSuit: "text-xl sm:text-2xl",
+      backIcon: "text-lg sm:text-xl",
       padding: "p-0.5",
       border: "border-[1.5px]",
       rounded: "rounded-md",
     },
     md: {
-      container: "w-16 h-24",
-      cornerRank: "text-base",
-      cornerSuit: "text-xl",
-      centerSuit: "text-4xl",
-      backIcon: "text-3xl",
-      padding: "p-1",
+      container: "w-12 sm:w-16 h-16 sm:h-24",
+      cornerRank: "text-xs sm:text-base",
+      cornerSuit: "text-base sm:text-xl",
+      centerSuit: "text-3xl sm:text-4xl",
+      backIcon: "text-2xl sm:text-3xl",
+      padding: "p-0.5 sm:p-1",
       border: "border-2",
       rounded: "rounded-lg",
     },
     lg: {
-      container: "w-20 h-28",
-      cornerRank: "text-lg",
-      cornerSuit: "text-2xl",
-      centerSuit: "text-5xl",
-      backIcon: "text-4xl",
-      padding: "p-1.5",
+      container: "w-16 sm:w-20 h-20 sm:h-28",
+      cornerRank: "text-sm sm:text-lg",
+      cornerSuit: "text-lg sm:text-2xl",
+      centerSuit: "text-4xl sm:text-5xl",
+      backIcon: "text-3xl sm:text-4xl",
+      padding: "p-1 sm:p-1.5",
       border: "border-2",
       rounded: "rounded-lg",
     },
@@ -43,11 +43,13 @@ export function Card({ card, faceDown = false, size = "md" }: CardProps) {
   if (faceDown) {
     return (
       <div
-        className={`${config.container} ${config.rounded} ${config.border} border-gray-600 bg-gradient-to-br from-blue-900 to-blue-700 shadow-lg`}
+        className={`${config.container} ${config.rounded} ${config.border} border-gray-600 shadow-lg overflow-hidden`}
       >
-        <div className="flex h-full items-center justify-center">
-          <div className={`${config.backIcon} text-blue-300`}>🂠</div>
-        </div>
+        <img
+          src="/card-back.jpg"
+          alt="Card back"
+          className="h-full w-full object-cover"
+        />
       </div>
     );
   }
@@ -84,25 +86,14 @@ export function Card({ card, faceDown = false, size = "md" }: CardProps) {
     <div
       className={`${config.container} ${config.rounded} ${config.border} relative border-gray-300 bg-white shadow-lg transition-transform hover:scale-105`}
     >
-      {/* Top left corner */}
-      <div className={`absolute left-0 top-0 ${config.padding} font-bold leading-none ${isRed ? "text-red-600" : "text-black"}`}>
-        <div className={`${config.cornerRank} leading-none`}>{displayRank}</div>
-        <div className={`${config.cornerSuit} leading-none`}>{suitSymbol}</div>
-      </div>
-
-      {/* Center suit */}
-      <div
-        className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 ${config.centerSuit} ${isRed ? "text-red-600" : "text-black"}`}
-      >
-        {suitSymbol}
-      </div>
-
-      {/* Bottom right corner (rotated) */}
-      <div
-        className={`absolute right-0 bottom-0 ${config.padding} rotate-180 font-bold leading-none ${isRed ? "text-red-600" : "text-black"}`}
-      >
-        <div className={`${config.cornerRank} leading-none`}>{displayRank}</div>
-        <div className={`${config.cornerSuit} leading-none`}>{suitSymbol}</div>
+      {/* Center - Rank and Suit */}
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
+        <div className={`${config.cornerRank} font-bold leading-none ${isRed ? "text-red-600" : "text-black"}`}>
+          {displayRank}
+        </div>
+        <div className={`${config.centerSuit} ${isRed ? "text-red-600" : "text-black"}`}>
+          {suitSymbol}
+        </div>
       </div>
     </div>
   );

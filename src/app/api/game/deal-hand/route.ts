@@ -43,6 +43,15 @@ export async function POST(request: Request) {
       );
     }
 
+    // Check if game is paused
+    if (room.is_paused) {
+      log.error(new Error("Game is paused"), { roomId });
+      return NextResponse.json(
+        { error: "Game is paused. Unpause to deal the next hand." },
+        { status: 400 },
+      );
+    }
+
     // Get active players (not spectating, not sitting out)
     const { data: players, error: playersError } = await supabase
       .from("room_players")
@@ -348,7 +357,7 @@ export async function POST(request: Request) {
       })
       .eq("id", roomId);
 
-    log.success({
+    log.info("Hand dealt successfully", {
       roomId,
       gameStateId: gameState.id,
       handNumber: newHandNumber,

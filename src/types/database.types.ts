@@ -338,6 +338,7 @@ export type Database = {
           game_mode: Database["public"]["Enums"]["game_mode"]
           id: string
           is_active: boolean | null
+          is_paused: boolean
           last_activity_at: string | null
           max_buy_in: number
           max_players: number
@@ -355,6 +356,7 @@ export type Database = {
           game_mode?: Database["public"]["Enums"]["game_mode"]
           id?: string
           is_active?: boolean | null
+          is_paused?: boolean
           last_activity_at?: string | null
           max_buy_in: number
           max_players?: number
@@ -372,6 +374,7 @@ export type Database = {
           game_mode?: Database["public"]["Enums"]["game_mode"]
           id?: string
           is_active?: boolean | null
+          is_paused?: boolean
           last_activity_at?: string | null
           max_buy_in?: number
           max_players?: number

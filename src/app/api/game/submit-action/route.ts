@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { getServerClient } from "@/lib/supabase/server";
 import { submitActionSchema } from "@/lib/validation/schemas";
-import { type ActionHistoryItem, type BoardState } from "@/types/database";
+import { type ActionHistoryItem, type BoardState, type GameState } from "@/types/database";
 import type { Json } from "@/types/database.types";
 import { shuffleDeck } from "@/lib/poker/deck";
 import { z } from "zod";
 import { logApiRoute, createLogger } from "@/lib/logger";
-import { getBettingLimits, isValidBetAmount } from "@/lib/poker/betting";
+import { getBettingLimits, isValidBetAmount, shouldAutoDealToShowdown } from "@/lib/poker/betting";
 
 /**
  * Submit a player action to the queue
@@ -104,7 +104,7 @@ export async function POST(request: Request) {
     // In production, this could be done via a webhook or background job
     await processAction(action.id);
 
-    log.success({ roomId, actionId: action.id, seatNumber, actionType });
+    log.info("Action submitted successfully", { roomId, actionId: action.id, seatNumber, actionType });
     return NextResponse.json({ action }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -360,6 +360,106 @@ async function processAction(actionId: string) {
     })
     .eq("id", player.id);
 
+  // Update local player array with new state for detection
+  if (playerIsAllIn) {
+    player.is_all_in = true;
+  }
+  if (newChipStack !== player.chip_stack) {
+    player.chip_stack = newChipStack;
+  }
+  player.current_bet = newCurrentBet;
+
+  // Check if auto-deal is needed (no more action possible)
+  if (shouldAutoDealToShowdown(players)) {
+    processLogger.info({
+      roomId: action.room_id,
+      phase: gameState.phase,
+      potSize: newPotSize,
+    }, "No more action possible - auto-dealing to showdown");
+
+    // Get deck and calculate card indices (reuse existing logic)
+    const currentBoardState = (gameState.board_state as BoardState) || {
+      board1: [],
+      board2: []
+    };
+    const board1 = currentBoardState.board1 || [];
+    const board2 = currentBoardState.board2 || [];
+    const burnedCards = gameState.burned_card_indices ?? [];
+    const deck = shuffleDeck(gameState.deck_seed);
+
+    const seatedPlayers = players.filter((p) => !p.is_spectating);
+    const holeCardsDealt = seatedPlayers.length * 4;
+    const boardCardsDealt = board1.length + board2.length;
+    const burnedCardsCount = burnedCards.length;
+    const cardIndex = holeCardsDealt + burnedCardsCount + boardCardsDealt;
+
+    // Auto-deal remaining cards
+    const dealResult = await autoDealToShowdown(
+      gameState,
+      deck,
+      cardIndex,
+      board1,
+      board2,
+      burnedCards
+    );
+
+    // Reset betting state for all players
+    await supabase
+      .from("room_players")
+      .update({ current_bet: 0 })
+      .eq("room_id", action.room_id);
+
+    // Update game state to showdown
+    const updatedBoardState: BoardState = {
+      board1: dealResult.board1,
+      board2: dealResult.board2,
+    };
+
+    const actionHistory = (gameState.action_history as ActionHistoryItem[] | null) ?? [];
+    const newActionHistory: ActionHistoryItem[] = [
+      ...actionHistory,
+      {
+        seat_number: action.seat_number,
+        action_type: action.action_type,
+        amount: action.amount ?? undefined,
+        timestamp: new Date().toISOString(),
+      },
+    ];
+
+    await supabase
+      .from("game_states")
+      .update({
+        pot_size: newPotSize,
+        current_bet: 0,
+        last_aggressor_seat: newLastAggressor,
+        last_raise_amount: 0,
+        current_actor_seat: null,
+        action_deadline_at: null,
+        seats_to_act: [],
+        seats_acted: [],
+        action_history: newActionHistory as unknown as Json,
+        phase: 'showdown',
+        board_state: updatedBoardState as unknown as Json,
+        burned_card_indices: dealResult.burnedCards,
+      })
+      .eq("id", gameState.id);
+
+    // Mark action as processed
+    await supabase
+      .from("player_actions")
+      .update({ processed: true, processed_at: new Date().toISOString() })
+      .eq("id", actionId);
+
+    processLogger.info({
+      roomId: action.room_id,
+      potSize: newPotSize,
+      board1: dealResult.board1,
+      board2: dealResult.board2,
+    }, "Auto-dealt to showdown - awaiting normal resolution");
+
+    return; // Exit early - showdown handled by normal flow
+  }
+
   // Check if only one player remains (everyone else folded)
   // Update the local player array to reflect the fold
   if (playerHasFolded) {
@@ -440,7 +540,7 @@ async function processAction(actionId: string) {
       .update({ processed: true, processed_at: new Date().toISOString() })
       .eq("id", actionId);
 
-    processLogger.success({
+    processLogger.info({
       roomId: action.room_id,
       winnerSeat: winner.seat_number,
       potAwarded: newPotSize,
@@ -654,4 +754,83 @@ async function processAction(actionId: string) {
     // This could be done via a webhook or separate call
     // For now, we'll let the client detect showdown and call resolve
   }
+}
+
+/**
+ * Auto-deals all remaining cards when no more betting is possible
+ * Deals turn and/or river as needed, then advances to showdown
+ *
+ * @param gameState Current game state
+ * @param deck Shuffled deck from game state seed
+ * @param cardIndex Current position in deck
+ * @param board1 Current board 1 cards
+ * @param board2 Current board 2 cards
+ * @param burnedCards Current burned card indices
+ * @returns Updated state for showdown
+ */
+async function autoDealToShowdown(
+  gameState: GameState,
+  deck: string[],
+  cardIndex: number,
+  board1: string[],
+  board2: string[],
+  burnedCards: number[]
+): Promise<{
+  phase: 'showdown';
+  board1: string[];
+  board2: string[];
+  burnedCards: number[];
+  cardIndex: number;
+}> {
+  const processLogger = createLogger("auto-deal-to-showdown");
+
+  processLogger.info({
+    roomId: gameState.room_id,
+    currentPhase: gameState.phase,
+    board1Count: board1.length,
+    board2Count: board2.length,
+  }, "Auto-dealing remaining cards - all players all-in");
+
+  let currentCardIndex = cardIndex;
+  const updatedBoard1 = [...board1];
+  const updatedBoard2 = [...board2];
+  const updatedBurnedCards = [...burnedCards];
+
+  // Deal turn if we're on flop
+  if (gameState.phase === 'flop') {
+    updatedBurnedCards.push(currentCardIndex++);
+    updatedBoard1.push(deck[currentCardIndex++]);
+    updatedBoard2.push(deck[currentCardIndex++]);
+
+    processLogger.debug({
+      board1Count: updatedBoard1.length,
+      board2Count: updatedBoard2.length,
+    }, "Auto-dealt turn");
+  }
+
+  // Deal river if we're on flop or turn
+  if (gameState.phase === 'flop' || gameState.phase === 'turn') {
+    updatedBurnedCards.push(currentCardIndex++);
+    updatedBoard1.push(deck[currentCardIndex++]);
+    updatedBoard2.push(deck[currentCardIndex++]);
+
+    processLogger.debug({
+      board1Count: updatedBoard1.length,
+      board2Count: updatedBoard2.length,
+    }, "Auto-dealt river");
+  }
+
+  processLogger.info({
+    roomId: gameState.room_id,
+    finalBoard1: updatedBoard1,
+    finalBoard2: updatedBoard2,
+  }, "All cards dealt - advancing to showdown");
+
+  return {
+    phase: 'showdown',
+    board1: updatedBoard1,
+    board2: updatedBoard2,
+    burnedCards: updatedBurnedCards,
+    cardIndex: currentCardIndex,
+  };
 }

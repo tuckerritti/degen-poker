@@ -1,6 +1,15 @@
 /**
  * Calculates the maximum bet allowed in Pot Limit poker
- * Formula: Pot + Current Bet + Amount to Call
+ * Formula: Pot after you call + your call = Pot + 2 × (amount to call)
+ *
+ * Example:
+ * - Pot: $150 (includes all bets)
+ * - Current bet: $50
+ * - Your current bet: $0
+ * - To call: $50
+ * - Pot after call: $150 + $50 = $200
+ * - Max raise: $200 (pot after call)
+ * - Total you can bet: $50 (call) + $200 (raise) = $250
  */
 export function calculatePotLimitMax(
   potSize: number,
@@ -8,7 +17,8 @@ export function calculatePotLimitMax(
   playerCurrentBet: number,
 ): number {
   const toCall = currentBet - playerCurrentBet;
-  return potSize + currentBet + toCall;
+  // Pot after you call + your call = pot + toCall + toCall
+  return potSize + toCall + toCall;
 }
 
 /**
@@ -148,4 +158,32 @@ export function isBettingRoundComplete(
   const allActed = seatsToAct.length === 0;
 
   return allBetsEqual && allActed;
+}
+
+/**
+ * Determines if no more betting action is possible
+ * This happens when 0 or 1 non-folded, non-all-in players remain
+ *
+ * When this is true, the game should auto-deal remaining cards and advance to showdown
+ *
+ * @param players All players in the hand
+ * @returns true if cards should be auto-dealt to showdown
+ */
+export function shouldAutoDealToShowdown(
+  players: Array<{
+    has_folded: boolean | null;
+    is_all_in: boolean | null;
+    seat_number: number;
+  }>
+): boolean {
+  const remainingPlayers = players.filter(p => !p.has_folded);
+
+  if (remainingPlayers.length <= 1) {
+    return false; // Edge case or handled by fold detection
+  }
+
+  const activeNonAllIn = remainingPlayers.filter(p => !p.is_all_in);
+
+  // If 0 or 1 players can still bet, no action is possible
+  return activeNonAllIn.length <= 1;
 }

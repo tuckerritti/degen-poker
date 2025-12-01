@@ -94,7 +94,7 @@ export async function POST(
       );
     }
 
-    log.success({
+    log.info("Rebuy successful", {
       playerId,
       amount,
       newStack: updatedPlayer.chip_stack,

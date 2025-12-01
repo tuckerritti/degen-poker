@@ -62,7 +62,8 @@ export function evaluatePLOHand(
             ];
 
             try {
-              const result = evaluate({ holeCards: hand as any });
+              // Type assertion needed because hand-evaluator expects specific card type union
+              const result = evaluate({ holeCards: hand as unknown as Parameters<typeof evaluate>[0]['holeCards'] });
               // Higher strength number = better hand
               if (result.strength > bestRank) {
                 bestRank = result.strength;

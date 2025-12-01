@@ -4,11 +4,47 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/hooks/useSession";
 
+type GameMode = "double-board-plo" | "indian-poker" | "holdem-flips" | "321" | "54321";
+
+interface GameModeConfig {
+  id: GameMode;
+  name: string;
+  enabled: boolean;
+}
+
+const GAME_MODES: GameModeConfig[] = [
+  {
+    id: "double-board-plo",
+    name: "Double Board Bomb Pot PLO",
+    enabled: true,
+  },
+  {
+    id: "indian-poker",
+    name: "Indian Poker",
+    enabled: false,
+  },
+  {
+    id: "holdem-flips",
+    name: "Texas Hold'em Flips",
+    enabled: false,
+  },
+  {
+    id: "321",
+    name: "321",
+    enabled: false,
+  },
+  {
+    id: "54321",
+    name: "54321",
+    enabled: false,
+  },
+];
+
 export default function Home() {
   const router = useRouter();
   const { sessionId } = useSession();
+  const [selectedMode, setSelectedMode] = useState<GameMode>("double-board-plo");
   const [isCreating, setIsCreating] = useState(false);
-  const [joinRoomId, setJoinRoomId] = useState("");
 
   // Create room form state
   const [smallBlind, setSmallBlind] = useState(5);
@@ -19,6 +55,9 @@ export default function Home() {
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sessionId) return;
+
+    const selectedConfig = GAME_MODES.find(mode => mode.id === selectedMode);
+    if (!selectedConfig?.enabled) return;
 
     setIsCreating(true);
 
@@ -50,139 +89,118 @@ export default function Home() {
     }
   };
 
-  const handleJoinRoom = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (joinRoomId.trim()) {
-      router.push(`/room/${joinRoomId.trim()}`);
-    }
-  };
-
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-green-900 to-green-700 p-4">
+    <div className="flex min-h-screen items-center justify-center bg-tokyo-night p-4">
       <main className="w-full max-w-4xl">
-        <div className="mb-8 text-center">
-          <h1 className="mb-2 text-5xl font-bold text-white">Degen Poker</h1>
-          <p className="text-xl text-green-100">
-            Double Board Bomb Pot • Pot Limit Omaha
-          </p>
+        <div className="mb-6 sm:mb-8 text-center">
+          <h1 className="mb-2 text-4xl sm:text-6xl font-bold text-cream-parchment glow-gold" style={{ fontFamily: 'Cinzel, serif' }}>
+            DEGEN POKER
+          </h1>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
-          {/* Create Room Card */}
-          <div className="rounded-lg bg-white p-6 shadow-xl">
-            <h2 className="mb-4 text-2xl font-bold text-gray-800">
-              Create a Room
-            </h2>
-            <form onSubmit={handleCreateRoom} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Small Blind
-                  </label>
-                  <input
-                    type="number"
-                    value={smallBlind}
-                    onChange={(e) => setSmallBlind(Number(e.target.value))}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-green-500 focus:outline-none focus:ring-green-500"
-                    min="1"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Big Blind
-                  </label>
-                  <input
-                    type="number"
-                    value={bigBlind}
-                    onChange={(e) => setBigBlind(Number(e.target.value))}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-green-500 focus:outline-none focus:ring-green-500"
-                    min={smallBlind + 1}
-                    required
-                  />
-                </div>
-              </div>
+        <div className="glass rounded-lg p-4 sm:p-8 shadow-2xl">
+          <h2 className="mb-4 sm:mb-6 text-xl sm:text-2xl font-bold text-cream-parchment" style={{ fontFamily: 'Playfair Display, serif' }}>
+            Select Game Mode
+          </h2>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Min Buy-in
-                  </label>
-                  <input
-                    type="number"
-                    value={minBuyIn}
-                    onChange={(e) => setMinBuyIn(Number(e.target.value))}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-green-500 focus:outline-none focus:ring-green-500"
-                    min={bigBlind * 20}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Max Buy-in
-                  </label>
-                  <input
-                    type="number"
-                    value={maxBuyIn}
-                    onChange={(e) => setMaxBuyIn(Number(e.target.value))}
-                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-green-500 focus:outline-none focus:ring-green-500"
-                    min={minBuyIn + 1}
-                    required
-                  />
-                </div>
-              </div>
-
+          <div className="mb-6 sm:mb-8 grid gap-3 sm:gap-4 md:grid-cols-2">
+            {GAME_MODES.map((mode) => (
               <button
-                type="submit"
-                disabled={isCreating}
-                className="w-full rounded-md bg-green-600 px-4 py-3 font-semibold text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50"
+                key={mode.id}
+                onClick={() => setSelectedMode(mode.id)}
+                disabled={!mode.enabled}
+                className={`rounded-lg border-2 p-3 sm:p-4 text-center transition-all ${
+                  selectedMode === mode.id && mode.enabled
+                    ? "border-whiskey-gold bg-royal-blue/30 shadow-lg"
+                    : mode.enabled
+                      ? "border-white/10 bg-black/20 hover:border-whiskey-gold/50 hover:bg-royal-blue/20"
+                      : "border-white/5 bg-black/10 cursor-not-allowed opacity-40"
+                }`}
               >
-                {isCreating ? "Creating..." : "Create Room"}
+                <h3 className={`text-sm sm:text-base font-bold ${selectedMode === mode.id && mode.enabled ? 'text-whiskey-gold' : 'text-cream-parchment'}`} style={{ fontFamily: 'Lato, sans-serif' }}>
+                  {mode.name}
+                </h3>
+                {!mode.enabled && (
+                  <span className="mt-2 inline-block text-xs font-semibold text-cigar-ash">
+                    COMING SOON
+                  </span>
+                )}
               </button>
-            </form>
+            ))}
           </div>
 
-          {/* Join Room Card */}
-          <div className="rounded-lg bg-white p-6 shadow-xl">
-            <h2 className="mb-4 text-2xl font-bold text-gray-800">
-              Join a Room
-            </h2>
-            <form onSubmit={handleJoinRoom} className="space-y-4">
+          <form onSubmit={handleCreateRoom} className="space-y-3 sm:space-y-4">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Room ID
+                <label className="block text-sm font-medium text-cigar-ash" style={{ fontFamily: 'Lato, sans-serif' }}>
+                  Small Blind
                 </label>
                 <input
-                  type="text"
-                  value={joinRoomId}
-                  onChange={(e) => setJoinRoomId(e.target.value)}
-                  placeholder="Enter room ID or paste link"
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-green-500 focus:outline-none focus:ring-green-500"
+                  type="number"
+                  value={smallBlind}
+                  onChange={(e) => setSmallBlind(Number(e.target.value))}
+                  className="mt-1 block w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-cream-parchment shadow-sm focus:border-whiskey-gold focus:outline-none focus:ring-1 focus:ring-whiskey-gold backdrop-blur-sm"
+                  style={{ fontFamily: 'Roboto Mono, monospace' }}
+                  min="1"
                   required
                 />
-                <p className="mt-2 text-sm text-gray-500">
-                  Paste the room ID shared by the host
-                </p>
               </div>
-
-              <button
-                type="submit"
-                className="w-full rounded-md bg-blue-600 px-4 py-3 font-semibold text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-              >
-                Join Room
-              </button>
-            </form>
-
-            <div className="mt-6 rounded-md bg-gray-50 p-4">
-              <h3 className="mb-2 font-semibold text-gray-800">Game Info</h3>
-              <ul className="space-y-1 text-sm text-gray-600">
-                <li>• 8 players max per table</li>
-                <li>• Double board bomb pot format</li>
-                <li>• Pot Limit Omaha rules</li>
-                <li>• No authentication required</li>
-              </ul>
+              <div>
+                <label className="block text-sm font-medium text-cigar-ash" style={{ fontFamily: 'Lato, sans-serif' }}>
+                  Big Blind
+                </label>
+                <input
+                  type="number"
+                  value={bigBlind}
+                  onChange={(e) => setBigBlind(Number(e.target.value))}
+                  className="mt-1 block w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-cream-parchment shadow-sm focus:border-whiskey-gold focus:outline-none focus:ring-1 focus:ring-whiskey-gold backdrop-blur-sm"
+                  style={{ fontFamily: 'Roboto Mono, monospace' }}
+                  min={smallBlind + 1}
+                  required
+                />
+              </div>
             </div>
-          </div>
+
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
+              <div>
+                <label className="block text-sm font-medium text-cigar-ash" style={{ fontFamily: 'Lato, sans-serif' }}>
+                  Min Buy-in
+                </label>
+                <input
+                  type="number"
+                  value={minBuyIn}
+                  onChange={(e) => setMinBuyIn(Number(e.target.value))}
+                  className="mt-1 block w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-cream-parchment shadow-sm focus:border-whiskey-gold focus:outline-none focus:ring-1 focus:ring-whiskey-gold backdrop-blur-sm"
+                  style={{ fontFamily: 'Roboto Mono, monospace' }}
+                  min={bigBlind * 20}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-cigar-ash" style={{ fontFamily: 'Lato, sans-serif' }}>
+                  Max Buy-in
+                </label>
+                <input
+                  type="number"
+                  value={maxBuyIn}
+                  onChange={(e) => setMaxBuyIn(Number(e.target.value))}
+                  className="mt-1 block w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-cream-parchment shadow-sm focus:border-whiskey-gold focus:outline-none focus:ring-1 focus:ring-whiskey-gold backdrop-blur-sm"
+                  style={{ fontFamily: 'Roboto Mono, monospace' }}
+                  min={minBuyIn + 1}
+                  required
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isCreating || !GAME_MODES.find(mode => mode.id === selectedMode)?.enabled}
+              className="w-full rounded-md bg-whiskey-gold px-4 py-3 font-bold text-tokyo-night shadow-lg hover:bg-whiskey-gold/90 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-whiskey-gold focus:ring-offset-2 focus:ring-offset-tokyo-night disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              style={{ fontFamily: 'Lato, sans-serif' }}
+            >
+              {isCreating ? "Creating..." : "Create Room"}
+            </button>
+          </form>
         </div>
       </main>
     </div>
