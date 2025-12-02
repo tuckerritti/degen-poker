@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
-import { getServerClient } from "@/lib/supabase/server";
+import { getServiceClient, getAuthUser } from "@/lib/supabase/server";
 import { z } from "zod";
 import { logApiRoute } from "@/lib/logger";
 
 const createRoomSchema = z
   .object({
-    sessionId: z.string().min(1, "Session ID is required"),
     smallBlind: z.number().positive("Small blind must be positive"),
     bigBlind: z.number().positive("Big blind must be positive"),
     minBuyIn: z.number().positive("Min buy-in must be positive"),
@@ -33,15 +32,19 @@ export async function POST(request: Request) {
 
     // Validation
     const validatedData = createRoomSchema.parse(body);
-    const { sessionId, smallBlind, bigBlind, minBuyIn, maxBuyIn } =
-      validatedData;
+    const { smallBlind, bigBlind, minBuyIn, maxBuyIn } = validatedData;
 
-    const supabase = await getServerClient();
+    const { user } = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const supabase = await getServiceClient();
 
     const { data: room, error } = await supabase
       .from("rooms")
       .insert({
-        owner_session_id: sessionId,
+        owner_auth_user_id: user.id,
         small_blind: smallBlind,
         big_blind: bigBlind,
         bomb_pot_ante: smallBlind * 2, // Default: 2x small blind
@@ -56,13 +59,13 @@ export async function POST(request: Request) {
       .single();
 
     if (error) {
-      log.error(error, { sessionId, smallBlind, bigBlind });
+      log.error(error, { userId: user.id, smallBlind, bigBlind });
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     log.success({
       roomId: room.id,
-      sessionId,
+      userId: user.id,
       smallBlind,
       bigBlind,
       minBuyIn,

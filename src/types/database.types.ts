@@ -176,7 +176,7 @@ export type Database = {
           processed_at: string | null
           room_id: string
           seat_number: number
-          session_id: string
+          auth_user_id: string | null
         }
         Insert: {
           action_type: Database["public"]["Enums"]["action_type"]
@@ -189,7 +189,7 @@ export type Database = {
           processed_at?: string | null
           room_id: string
           seat_number: number
-          session_id: string
+          auth_user_id?: string | null
         }
         Update: {
           action_type?: Database["public"]["Enums"]["action_type"]
@@ -202,7 +202,7 @@ export type Database = {
           processed_at?: string | null
           room_id?: string
           seat_number?: number
-          session_id?: string
+          auth_user_id?: string | null
         }
         Relationships: [
           {
@@ -229,7 +229,7 @@ export type Database = {
           id: string
           room_id: string
           seat_number: number
-          session_id: string
+          auth_user_id: string | null
         }
         Insert: {
           cards: Json
@@ -238,7 +238,7 @@ export type Database = {
           id?: string
           room_id: string
           seat_number: number
-          session_id: string
+          auth_user_id?: string | null
         }
         Update: {
           cards?: Json
@@ -247,7 +247,6 @@ export type Database = {
           id?: string
           room_id?: string
           seat_number?: number
-          session_id?: string
         }
         Relationships: [
           {
@@ -280,7 +279,7 @@ export type Database = {
           last_action_at: string | null
           room_id: string
           seat_number: number
-          session_id: string
+          auth_user_id: string | null
           total_buy_in: number
           total_invested_this_hand: number | null
         }
@@ -297,7 +296,7 @@ export type Database = {
           last_action_at?: string | null
           room_id: string
           seat_number: number
-          session_id: string
+          auth_user_id?: string | null
           total_buy_in?: number
           total_invested_this_hand?: number | null
         }
@@ -314,7 +313,6 @@ export type Database = {
           last_action_at?: string | null
           room_id?: string
           seat_number?: number
-          session_id?: string
           total_buy_in?: number
           total_invested_this_hand?: number | null
         }
@@ -344,7 +342,7 @@ export type Database = {
           max_buy_in: number
           max_players: number
           min_buy_in: number
-          owner_session_id: string
+          owner_auth_user_id: string | null
           pause_after_hand: boolean
           small_blind: number
           updated_at: string
@@ -364,7 +362,7 @@ export type Database = {
           max_buy_in: number
           max_players?: number
           min_buy_in: number
-          owner_session_id: string
+          owner_auth_user_id?: string | null
           pause_after_hand?: boolean
           small_blind: number
           updated_at?: string
@@ -384,7 +382,7 @@ export type Database = {
           max_buy_in?: number
           max_players?: number
           min_buy_in?: number
-          owner_session_id?: string
+          owner_auth_user_id?: string | null
           pause_after_hand?: boolean
           small_blind?: number
           updated_at?: string
@@ -553,4 +551,3 @@ export const Constants = {
     },
   },
 } as const
-
