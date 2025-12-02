@@ -1,4 +1,4 @@
-import { getServerClient } from "@/lib/supabase/server";
+import { getServiceClient } from "@/lib/supabase/server";
 import { generateSeed, shuffleDeck } from "@/lib/poker/deck";
 import { logApiRoute } from "@/lib/logger";
 
@@ -7,10 +7,10 @@ import { logApiRoute } from "@/lib/logger";
  * Used by both the manual deal-hand API route and auto-deal functionality.
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export async function dealHandLogic(roomId: string, sessionId: string) {
+export async function dealHandLogic(roomId: string, authUserId: string) {
   const log = logApiRoute("SHARED", "/lib/poker/deal-hand");
 
-  const supabase = await getServerClient();
+  const supabase = await getServiceClient();
 
   // Get room details
   const { data: room, error: roomError } = await supabase
@@ -100,7 +100,13 @@ export async function dealHandLogic(roomId: string, sessionId: string) {
         .single();
 
       if (updateError) {
-        log.error(updateError, { playerId: player.id, phase: "ante_all_in" });
+        log.error(updateError?.message || updateError, {
+          playerId: player.id,
+          phase: "ante_all_in",
+          code: updateError?.code,
+          details: updateError?.details,
+          hint: updateError?.hint,
+        });
         throw new Error(
           `Failed to collect ante from player ${player.seat_number}`,
         );
@@ -120,7 +126,13 @@ export async function dealHandLogic(roomId: string, sessionId: string) {
         .single();
 
       if (updateError) {
-        log.error(updateError, { playerId: player.id, phase: "ante_deduct" });
+        log.error(updateError?.message || updateError, {
+          playerId: player.id,
+          phase: "ante_deduct",
+          code: updateError?.code,
+          details: updateError?.details,
+          hint: updateError?.hint,
+        });
         throw new Error(
           `Failed to collect ante from player ${player.seat_number}`,
         );
@@ -181,7 +193,7 @@ export async function dealHandLogic(roomId: string, sessionId: string) {
         deck[cardIndex++],
       ];
       playerHandsToInsert.push({
-        session_id: player.session_id,
+        auth_user_id: player.auth_user_id,
         seat_number: player.seat_number,
         cards: holeCards,
       });
@@ -216,12 +228,12 @@ export async function dealHandLogic(roomId: string, sessionId: string) {
   if (room.button_seat === null) {
     // First hand - find owner's seat from original players array
     const ownerPlayer = players.find(
-      (p) => p.session_id === room.owner_session_id,
+      (p) => p.auth_user_id === room.owner_auth_user_id,
     );
     newButtonSeat = ownerPlayer?.seat_number ?? 0;
     log.info("Initializing button to owner's seat", {
       roomId,
-      ownerSessionId: room.owner_session_id,
+      ownerAuthUserId: room.owner_auth_user_id,
       ownerFound: !!ownerPlayer,
       buttonSeat: newButtonSeat,
     });

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getServerClient } from "@/lib/supabase/server";
+import { getServiceClient, getAuthUser } from "@/lib/supabase/server";
 import { rebuySchema } from "@/lib/validation/schemas";
 import { z } from "zod";
 import { logApiRoute } from "@/lib/logger";
@@ -18,9 +18,14 @@ export async function POST(
 
     // Validation
     const validatedData = rebuySchema.parse(body);
-    const { amount, sessionId } = validatedData;
+    const { amount } = validatedData;
 
-    const supabase = await getServerClient();
+    const { user } = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const supabase = await getServiceClient();
 
     // Get player with room details
     const { data: player, error: playerError } = await supabase
@@ -44,7 +49,7 @@ export async function POST(
     }
 
     // Verify session ownership
-    if (player.session_id !== sessionId) {
+    if (player.auth_user_id !== user.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 

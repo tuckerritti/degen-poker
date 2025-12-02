@@ -3,19 +3,16 @@ import { z } from "zod";
 // Rebuy Schema
 export const rebuySchema = z.object({
   amount: z.number().positive("Amount must be positive"),
-  sessionId: z.string().min(1, "Session ID is required"),
 });
 
 // Deal Hand Schema
 export const dealHandSchema = z.object({
   roomId: z.string().uuid("Invalid room ID"),
-  sessionId: z.string().min(1, "Session ID is required"),
 });
 
 // Submit Action Schema - Using discriminated union for type-safe action validation
 const baseActionSchema = z.object({
   roomId: z.string().uuid("Invalid room ID"),
-  sessionId: z.string().min(1, "Session ID is required"),
   seatNumber: z.number().int().min(0).max(11, "Invalid seat number"),
 });
 

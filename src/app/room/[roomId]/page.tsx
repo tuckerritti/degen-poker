@@ -36,7 +36,7 @@ export default function RoomPage({
     null,
   );
 
-  const myPlayer = players.find((p) => p.session_id === sessionId);
+  const myPlayer = players.find((p) => p.auth_user_id === sessionId);
   const isMyTurn =
     gameState &&
     myPlayer &&
@@ -118,7 +118,7 @@ export default function RoomPage({
   useEffect(() => {
     // Calculate seated players
     const seatedPlayerCount = players.filter((p) => !p.is_spectating).length;
-    const isOwner = room?.owner_session_id === sessionId;
+    const isOwner = room?.owner_auth_user_id === sessionId;
 
     // Only auto-deal if:
     // 1. No active game state (hand just ended)
@@ -155,7 +155,7 @@ export default function RoomPage({
           const response = await fetch("/api/game/deal-hand", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ roomId, sessionId }),
+          body: JSON.stringify({ roomId }),
           });
 
           if (!response.ok) {
@@ -197,7 +197,6 @@ export default function RoomPage({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sessionId,
           displayName,
           seatNumber: selectedSeat,
           buyInAmount,
@@ -234,7 +233,6 @@ export default function RoomPage({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           amount: rebuyAmount,
-          sessionId,
         }),
       });
 
@@ -259,7 +257,7 @@ export default function RoomPage({
       const response = await fetch("/api/game/deal-hand", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomId, sessionId }),
+        body: JSON.stringify({ roomId }),
       });
 
       const data = await response.json();
@@ -278,7 +276,7 @@ export default function RoomPage({
       const response = await fetch(`/api/rooms/${roomId}/pause`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId }),
+        body: JSON.stringify({}),
       });
 
       const data = await response.json();
@@ -301,7 +299,6 @@ export default function RoomPage({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           roomId,
-          sessionId,
           seatNumber: myPlayer.seat_number,
           actionType,
           amount,
@@ -371,7 +368,7 @@ export default function RoomPage({
   }
 
   const seatedPlayers = players.filter((p) => !p.is_spectating).length;
-  const isOwner = room.owner_session_id === sessionId;
+  const isOwner = room.owner_auth_user_id === sessionId;
   const canDeal =
     !gameState &&
     seatedPlayers >= 2 &&

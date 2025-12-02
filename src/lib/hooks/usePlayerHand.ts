@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getBrowserClient } from "@/lib/supabase/client";
 import { clientLogger } from "@/lib/client-logger";
 import type { PlayerHand } from "@/types/database";
+import { getBrowserClient } from "@/lib/supabase/client";
 
 /**
- * Hook to subscribe to real-time player hand updates
- * Per POKER_PLAN.md Section 2: RLS ensures players only see their own cards
- * This hook filters by session_id to get the current player's hole cards
+ * Hook to subscribe to real-time player hand updates directly via Supabase
+ * RLS restricts rows to auth.uid() = auth_user_id
  */
 export function usePlayerHand(roomId: string | null, sessionId: string | null) {
   const [playerHand, setPlayerHand] = useState<PlayerHand | null>(null);
@@ -21,76 +20,56 @@ export function usePlayerHand(roomId: string | null, sessionId: string | null) {
       return;
     }
 
-    clientLogger.debug("usePlayerHand: Initializing subscription", { roomId });
+    let cancelled = false;
     const supabase = getBrowserClient();
 
-    // Initial fetch - get current player's hand
     const fetchInitial = async () => {
       try {
-        clientLogger.debug("usePlayerHand: Fetching player hand", { roomId });
         const { data, error } = await supabase
           .from("player_hands")
           .select("*")
           .eq("room_id", roomId)
-          .eq("session_id", sessionId)
+          .eq("auth_user_id", sessionId)
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
 
-        if (error) {
-          clientLogger.error(
-            "usePlayerHand: Error fetching player hand",
-            error,
-          );
-          setError(error.message);
-        } else {
-          // IMPORTANT: Never log actual hole cards for security
-          clientLogger.info("usePlayerHand: Player hand fetched", {
-            roomId,
-            hasHand: !!data,
-            cardCount: data?.cards
-              ? (data.cards as unknown as string[]).length
-              : 0,
-          });
-          setPlayerHand(data);
+        if (!cancelled) {
+          if (error) {
+            setError(error.message);
+          } else {
+            setPlayerHand(data);
+          }
         }
       } catch (err) {
-        clientLogger.error(
-          "usePlayerHand: Unexpected error",
-          err instanceof Error ? err : new Error(String(err)),
-        );
-        setError("Failed to fetch player hand");
+        if (!cancelled) {
+          clientLogger.error(
+            "usePlayerHand: Unexpected error",
+            err instanceof Error ? err : new Error(String(err)),
+          );
+          setError("Failed to fetch player hand");
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchInitial();
 
-    // Subscribe to changes - filter by session_id (RLS enforcement)
     const channel = supabase
-      .channel(`player-hand:${roomId}:${sessionId}`)
+      .channel(`player-hands:${roomId}:${sessionId}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "player_hands",
-          filter: `session_id=eq.${sessionId}`,
+          filter: `auth_user_id=eq.${sessionId}`,
         },
         (payload) => {
-          // IMPORTANT: Never log actual hole cards for security
-          clientLogger.info("usePlayerHand: Real-time update received", {
-            roomId,
-            eventType: payload.eventType,
-          });
           if (payload.eventType === "DELETE") {
-            clientLogger.info("usePlayerHand: Hand deleted", { roomId });
             setPlayerHand(null);
-          } else if (
-            payload.eventType === "INSERT" ||
-            payload.eventType === "UPDATE"
-          ) {
+          } else {
             setPlayerHand(payload.new as PlayerHand);
           }
         },
@@ -98,7 +77,7 @@ export function usePlayerHand(roomId: string | null, sessionId: string | null) {
       .subscribe();
 
     return () => {
-      clientLogger.debug("usePlayerHand: Unsubscribing", { roomId });
+      cancelled = true;
       channel.unsubscribe();
     };
   }, [roomId, sessionId]);

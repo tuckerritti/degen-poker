@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
-import { getServerClient } from "@/lib/supabase/server";
+import { getServiceClient, getAuthUser } from "@/lib/supabase/server";
 import { z } from "zod";
 import { logApiRoute } from "@/lib/logger";
 
-const pauseSchema = z.object({
-  sessionId: z.string().min(1, "Session ID is required"),
-});
+const pauseSchema = z.object({});
 
 export async function POST(
   request: Request,
@@ -20,10 +18,14 @@ export async function POST(
     log.start({ roomId, bodyKeys: Object.keys(body) });
 
     // Validation
-    const validatedData = pauseSchema.parse(body);
-    const { sessionId } = validatedData;
+    pauseSchema.parse(body);
 
-    const supabase = await getServerClient();
+    const { user } = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const supabase = await getServiceClient();
 
     // Get room and verify ownership
     const { data: room, error: roomError } = await supabase
@@ -37,7 +39,7 @@ export async function POST(
     }
 
     // Verify caller is the owner
-    if (room.owner_session_id !== sessionId) {
+    if (room.owner_auth_user_id !== user.id) {
       return NextResponse.json(
         { error: "Only the room owner can pause/unpause the game" },
         { status: 403 },
@@ -85,7 +87,7 @@ export async function POST(
     if (updateError || !updatedRoom) {
       log.error(updateError || new Error("No room returned"), {
         roomId,
-        sessionId,
+        userId: user.id,
       });
       return NextResponse.json(
         { error: updateError?.message || "Failed to update room" },
@@ -99,7 +101,7 @@ export async function POST(
         : `Game ${updatedRoom.is_paused ? "paused" : "unpaused"}`,
       {
         roomId,
-        sessionId,
+        userId: user.id,
         isPaused: updatedRoom.is_paused,
         pauseAfterHand: updatedRoom.pause_after_hand,
         hasActiveHand: !!gameState,

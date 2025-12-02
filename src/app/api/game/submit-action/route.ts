@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getServerClient } from "@/lib/supabase/server";
+import { getAuthUser, getServiceClient } from "@/lib/supabase/server";
 import { submitActionSchema } from "@/lib/validation/schemas";
 import {
   type ActionHistoryItem,
@@ -29,24 +29,29 @@ export async function POST(request: Request) {
 
     // Validation
     const validatedData = submitActionSchema.parse(body);
-    const { roomId, sessionId, seatNumber, actionType } = validatedData;
+    const { roomId, seatNumber, actionType } = validatedData;
+    const { user } = await getAuthUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const amount = "amount" in validatedData ? validatedData.amount : undefined;
 
-    const supabase = await getServerClient();
+    const supabase = await getServiceClient();
 
     // Verify player exists and owns this session
     const { data: player, error: playerError } = await supabase
       .from("room_players")
       .select("*")
       .eq("room_id", roomId)
-      .eq("session_id", sessionId)
+      .eq("auth_user_id", user.id)
       .eq("seat_number", seatNumber)
       .single();
 
     if (playerError || !player) {
       log.error(playerError || new Error("Player not found"), {
         roomId,
-        sessionId,
+        userId: user.id,
         seatNumber,
       });
       return NextResponse.json({ error: "Player not found" }, { status: 404 });
@@ -87,7 +92,7 @@ export async function POST(request: Request) {
       .insert({
         game_state_id: gameState.id,
         room_id: roomId,
-        session_id: sessionId,
+        auth_user_id: user.id,
         seat_number: seatNumber,
         action_type: actionType,
         amount: amount || null,
@@ -132,7 +137,7 @@ export async function POST(request: Request) {
  */
 async function processAction(actionId: string) {
   const processLogger = createLogger("game-action-processor");
-  const supabase = await getServerClient();
+  const supabase = await getServiceClient();
 
   processLogger.debug({ actionId }, "Processing action");
 

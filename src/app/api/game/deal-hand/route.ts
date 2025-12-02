@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getServerClient } from "@/lib/supabase/server";
+import { getAuthUser, getServiceClient } from "@/lib/supabase/server";
 import { dealHandSchema } from "@/lib/validation/schemas";
 import { z } from "zod";
 import { logApiRoute } from "@/lib/logger";
@@ -14,14 +14,19 @@ export async function POST(request: Request) {
 
     // Validation
     const validatedData = dealHandSchema.parse(body);
-    const { roomId, sessionId } = validatedData;
+    const { roomId } = validatedData;
+    const { user } = await getAuthUser();
 
-    const supabase = await getServerClient();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const supabase = await getServiceClient();
 
     // Get room details
     const { data: room, error: roomError } = await supabase
       .from("rooms")
-      .select("owner_session_id, is_paused")
+      .select("owner_auth_user_id, is_paused")
       .eq("id", roomId)
       .single();
 
@@ -31,11 +36,11 @@ export async function POST(request: Request) {
     }
 
     // Verify the requester is the room owner
-    if (room.owner_session_id !== sessionId) {
+    if (room.owner_auth_user_id !== user.id) {
       log.error(new Error("Unauthorized deal attempt"), {
         roomId,
-        ownerSessionId: room.owner_session_id,
-        requestSessionId: sessionId,
+        ownerUserId: room.owner_auth_user_id,
+        requestUserId: user.id,
       });
       return NextResponse.json(
         { error: "Only the room owner can start the hand" },
@@ -53,7 +58,7 @@ export async function POST(request: Request) {
     }
 
     // Call shared deal logic
-    const { gameState } = await dealHandLogic(roomId, sessionId);
+    const { gameState } = await dealHandLogic(roomId, user.id);
 
     return NextResponse.json({ gameState }, { status: 201 });
   } catch (error) {

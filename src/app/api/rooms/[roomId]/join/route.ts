@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
-import { getServerClient } from "@/lib/supabase/server";
+import { getServiceClient, getAuthUser } from "@/lib/supabase/server";
 import { z } from "zod";
 import { logApiRoute } from "@/lib/logger";
 
 const joinRoomSchema = z
   .object({
-    sessionId: z.string().min(1, "Session ID is required"),
     displayName: z
       .string()
       .min(1, "Display name is required")
@@ -42,10 +41,15 @@ export async function POST(
 
     // Validation
     const validatedData = joinRoomSchema.parse(body);
-    const { sessionId, displayName, seatNumber, buyInAmount, isSpectating } =
+    const { displayName, seatNumber, buyInAmount, isSpectating } =
       validatedData;
 
-    const supabase = await getServerClient();
+    const { user } = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const supabase = await getServiceClient();
 
     // Validate room exists and is active
     const { data: room, error: roomError } = await supabase
@@ -117,7 +121,7 @@ export async function POST(
       .from("room_players")
       .select("id")
       .eq("room_id", roomId)
-      .eq("session_id", sessionId)
+      .eq("auth_user_id", user.id)
       .single();
 
     if (existingSession) {
@@ -132,7 +136,7 @@ export async function POST(
       .from("room_players")
       .insert({
         room_id: roomId,
-        session_id: sessionId,
+        auth_user_id: user.id,
         display_name: displayName,
         seat_number: (isSpectating ? -1 : seatNumber) as number,
         chip_stack: (isSpectating ? 0 : buyInAmount) as number,
@@ -147,14 +151,14 @@ export async function POST(
       .single();
 
     if (error) {
-      log.error(error, { roomId, sessionId, displayName, seatNumber });
+      log.error(error, { roomId, userId: user.id, displayName, seatNumber });
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
     log.info("Player joined successfully", {
       roomId,
       playerId: player.id,
-      sessionId,
+      userId: user.id,
       displayName,
       seatNumber: player.seat_number,
       isSpectating: player.is_spectating,

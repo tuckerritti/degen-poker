@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getServerClient } from "@/lib/supabase/server";
+import { getServiceClient } from "@/lib/supabase/server";
 import {
   splitPot,
   splitPotWithSidePots,
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     const validatedData = resolveHandSchema.parse(body);
     const { roomId } = validatedData;
 
-    const supabase = await getServerClient();
+    const supabase = await getServiceClient();
 
     // Get game state
     const { data: gameState, error: gameError } = await supabase

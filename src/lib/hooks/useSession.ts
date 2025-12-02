@@ -1,38 +1,55 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getBrowserClient } from "@/lib/supabase/client";
 
 /**
- * Hook to manage anonymous user sessions
- * Generates and persists a session ID in localStorage
+ * Hook to ensure an authenticated (anonymous) Supabase session exists
+ * Returns the auth user id for scoping queries and UI
  */
 export function useSession() {
-  // Use lazy initialization to avoid setState in effect
-  const [sessionId, setSessionId] = useState<string>(() => {
-    if (typeof window === "undefined") return "";
+  const [sessionId, setSessionId] = useState<string>("");
+  const [isLoading, setIsLoading] = useState(true);
 
-    let id = localStorage.getItem("poker_session_id");
+  useEffect(() => {
+    let cancelled = false;
 
-    if (!id) {
-      id = crypto.randomUUID();
-      localStorage.setItem("poker_session_id", id);
-    }
+    const fetchSession = async () => {
+      try {
+        const supabase = getBrowserClient();
+        const { data } = await supabase.auth.getSession();
 
-    return id;
-  });
+        if (!data.session) {
+          // Create an anonymous session
+          const { data: anonData, error } =
+            await supabase.auth.signInAnonymously();
 
-  const [isLoading] = useState(false);
+          if (error) throw error;
+          if (!cancelled && anonData.session?.user?.id) {
+            setSessionId(anonData.session.user.id);
+          }
+        } else if (!cancelled && data.session.user?.id) {
+          setSessionId(data.session.user.id);
+        }
+      } catch (error) {
+        console.error("Failed to fetch session", error);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+
+    fetchSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const clearSession = () => {
-    localStorage.removeItem("poker_session_id");
-    const newId = crypto.randomUUID();
-    localStorage.setItem("poker_session_id", newId);
-    setSessionId(newId);
+    // Trigger regeneration on next render
+    setSessionId("");
+    setIsLoading(true);
   };
 
-  return {
-    sessionId,
-    isLoading,
-    clearSession,
-  };
+  return { sessionId, isLoading, clearSession };
 }
