@@ -571,7 +571,7 @@ async function processAction(actionId: string) {
   );
 
   // If this was a valid raise (bet increased), reopen betting to players who already acted
-  if (newGameCurrentBet > (gameState.current_bet ?? 0) && newLastRaiseAmount > (gameState.last_raise_amount ?? 0)) {
+  if (newGameCurrentBet > (gameState.current_bet ?? 0)) {
     // Add all active players except current actor back to seats_to_act
     const activePlayers = players.filter(p => !p.has_folded && !p.is_all_in && p.seat_number !== action.seat_number);
     newSeatsToAct = activePlayers.map(p => p.seat_number);
@@ -580,6 +580,7 @@ async function processAction(actionId: string) {
       roomId: action.room_id,
       raisingSeat: action.seat_number,
       newBet: newGameCurrentBet,
+      oldBet: gameState.current_bet,
       reopenedTo: newSeatsToAct,
     }, "Raise reopened betting");
   }
