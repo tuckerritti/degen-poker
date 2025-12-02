@@ -133,14 +133,16 @@ export async function POST(request: Request) {
         if (updateError) {
           log.error(updateError, { playerId: player.id, phase: "ante_all_in" });
           return NextResponse.json(
-            { error: `Failed to collect ante from player ${player.seat_number}` },
+            {
+              error: `Failed to collect ante from player ${player.seat_number}`,
+            },
             { status: 500 },
           );
         }
         playersAfterAnte.push(updated);
       } else {
         // Take ante
-        const { data: updated, error: updateError} = await supabase
+        const { data: updated, error: updateError } = await supabase
           .from("room_players")
           .update({
             chip_stack: player.chip_stack - anteAmount,
@@ -154,7 +156,9 @@ export async function POST(request: Request) {
         if (updateError) {
           log.error(updateError, { playerId: player.id, phase: "ante_deduct" });
           return NextResponse.json(
-            { error: `Failed to collect ante from player ${player.seat_number}` },
+            {
+              error: `Failed to collect ante from player ${player.seat_number}`,
+            },
             { status: 500 },
           );
         }
@@ -177,7 +181,10 @@ export async function POST(request: Request) {
       .from("room_players")
       .update({ current_bet: 0 })
       .eq("room_id", roomId)
-      .in("id", playersAfterAnte.map((p) => p!.id));
+      .in(
+        "id",
+        playersAfterAnte.map((p) => p!.id),
+      );
 
     log.debug("Reset player current_bet to 0 after ante collection", {
       roomId,
@@ -192,7 +199,9 @@ export async function POST(request: Request) {
       deckSize: deck.length,
       firstFewCards: deck.slice(0, 20),
       hasNulls: deck.some((card) => card == null),
-      nullIndices: deck.map((card, i) => card == null ? i : null).filter((i) => i != null),
+      nullIndices: deck
+        .map((card, i) => (card == null ? i : null))
+        .filter((i) => i != null),
     });
 
     // Deal cards using actual card strings (per POKER_PLAN.md)
@@ -239,11 +248,15 @@ export async function POST(request: Request) {
 
     // Initialize button to owner's seat on first hand, otherwise advance
     let newButtonSeat: number;
-    const occupiedSeats = players.map(p => p.seat_number).sort((a, b) => a - b);
+    const occupiedSeats = players
+      .map((p) => p.seat_number)
+      .sort((a, b) => a - b);
 
     if (room.button_seat === null) {
       // First hand - find owner's seat from original players array
-      const ownerPlayer = players.find(p => p.session_id === room.owner_session_id);
+      const ownerPlayer = players.find(
+        (p) => p.session_id === room.owner_session_id,
+      );
       newButtonSeat = ownerPlayer?.seat_number ?? 0;
       log.info("Initializing button to owner's seat", {
         roomId,
@@ -314,10 +327,7 @@ export async function POST(request: Request) {
 
     if (gameError) {
       log.error(gameError, { roomId, phase: "creating_game_state" });
-      return NextResponse.json(
-        { error: gameError.message },
-        { status: 500 },
-      );
+      return NextResponse.json({ error: gameError.message }, { status: 500 });
     }
 
     // Insert player hands into PRIVATE table (per POKER_PLAN.md Section 2)

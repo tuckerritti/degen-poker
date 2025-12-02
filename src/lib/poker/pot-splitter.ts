@@ -30,19 +30,25 @@ export function splitPot(
   boardB: string[],
   potSize: number,
 ): Winner[] {
-  potLogger.info({
-    totalPlayers: players.length,
-    potSize,
-    boardACards: boardA.length,
-    boardBCards: boardB.length,
-  }, "Splitting pot with hand evaluation");
+  potLogger.info(
+    {
+      totalPlayers: players.length,
+      potSize,
+      boardACards: boardA.length,
+      boardBCards: boardB.length,
+    },
+    "Splitting pot with hand evaluation",
+  );
 
   const activePlayers = players.filter((p) => !p.hasFolded);
 
-  potLogger.debug({
-    activePlayers: activePlayers.length,
-    foldedPlayers: players.length - activePlayers.length,
-  }, "Active players determined");
+  potLogger.debug(
+    {
+      activePlayers: activePlayers.length,
+      foldedPlayers: players.length - activePlayers.length,
+    },
+    "Active players determined",
+  );
 
   if (activePlayers.length === 0) {
     potLogger.warn("No active players - cannot split pot");
@@ -51,10 +57,13 @@ export function splitPot(
 
   // If only one player remains, they win everything
   if (activePlayers.length === 1) {
-    potLogger.info({
-      winner: activePlayers[0].seatNumber,
-      amount: potSize,
-    }, "Single winner takes entire pot");
+    potLogger.info(
+      {
+        winner: activePlayers[0].seatNumber,
+        amount: potSize,
+      },
+      "Single winner takes entire pot",
+    );
     return [
       {
         seatNumber: activePlayers[0].seatNumber,
@@ -73,7 +82,7 @@ export function splitPot(
       holeCards: p.holeCards,
       hasFolded: p.hasFolded,
     })),
-    boardA
+    boardA,
   );
 
   const boardBWinners = findBoardWinners(
@@ -82,7 +91,7 @@ export function splitPot(
       holeCards: p.holeCards,
       hasFolded: p.hasFolded,
     })),
-    boardB
+    boardB,
   );
 
   // Split pot 50/50 between boards
@@ -93,7 +102,9 @@ export function splitPot(
 
   // Board A: split half pot (with odd chip) among winners
   if (boardAWinners.length > 0) {
-    const amountPerWinnerA = Math.floor((halfPot + oddChip) / boardAWinners.length);
+    const amountPerWinnerA = Math.floor(
+      (halfPot + oddChip) / boardAWinners.length,
+    );
     const remainderA = (halfPot + oddChip) % boardAWinners.length;
 
     boardAWinners.forEach((winner, idx) => {
@@ -123,16 +134,22 @@ export function splitPot(
     });
   }
 
-  potLogger.info({
-    totalWinners: winners.length,
-    boardAWinners: boardAWinners.length,
-    boardBWinners: boardBWinners.length,
-    totalDistributed: winners.reduce((sum, w) => sum + w.amount, 0),
-    scoops: activePlayers.filter(p =>
-      boardAWinners.some(w => w.seatNumber === p.seatNumber) &&
-      boardBWinners.some(w => w.seatNumber === p.seatNumber)
-    ).map(p => p.seatNumber),
-  }, "Pot split complete with hand evaluation");
+  potLogger.info(
+    {
+      totalWinners: winners.length,
+      boardAWinners: boardAWinners.length,
+      boardBWinners: boardBWinners.length,
+      totalDistributed: winners.reduce((sum, w) => sum + w.amount, 0),
+      scoops: activePlayers
+        .filter(
+          (p) =>
+            boardAWinners.some((w) => w.seatNumber === p.seatNumber) &&
+            boardBWinners.some((w) => w.seatNumber === p.seatNumber),
+        )
+        .map((p) => p.seatNumber),
+    },
+    "Pot split complete with hand evaluation",
+  );
 
   return winners;
 }
@@ -147,9 +164,12 @@ export function createSidePots(
     hasFolded: boolean;
   }>,
 ): Array<{ amount: number; eligibleSeats: number[] }> {
-  potLogger.debug({
-    totalPlayers: players.length,
-  }, "Creating side pots");
+  potLogger.debug(
+    {
+      totalPlayers: players.length,
+    },
+    "Creating side pots",
+  );
 
   const activePlayers = players.filter((p) => !p.hasFolded);
 
@@ -188,10 +208,13 @@ export function createSidePots(
     }
   }
 
-  potLogger.info({
-    sidePotCount: pots.length,
-    totalAmount: pots.reduce((sum, p) => sum + p.amount, 0),
-  }, "Side pots created");
+  potLogger.info(
+    {
+      sidePotCount: pots.length,
+      totalAmount: pots.reduce((sum, p) => sum + p.amount, 0),
+    },
+    "Side pots created",
+  );
 
   return pots;
 }
@@ -208,38 +231,42 @@ export function splitPotWithSidePots(
 ): Winner[] {
   const allWinners: Winner[] = [];
 
-  potLogger.info({
-    sidePotCount: sidePots.length,
-    totalPlayers: players.length,
-  }, "Splitting side pots");
+  potLogger.info(
+    {
+      sidePotCount: sidePots.length,
+      totalPlayers: players.length,
+    },
+    "Splitting side pots",
+  );
 
   for (const [potIndex, pot] of sidePots.entries()) {
-    potLogger.debug({
-      potIndex,
-      amount: pot.amount,
-      eligibleSeats: pot.eligibleSeats,
-    }, "Processing side pot");
+    potLogger.debug(
+      {
+        potIndex,
+        amount: pot.amount,
+        eligibleSeats: pot.eligibleSeats,
+      },
+      "Processing side pot",
+    );
 
     // Filter to eligible players for this pot
-    const eligiblePlayers = players.filter(p =>
-      pot.eligibleSeats.includes(p.seatNumber)
+    const eligiblePlayers = players.filter((p) =>
+      pot.eligibleSeats.includes(p.seatNumber),
     );
 
     // Split this pot's amount between boards
-    const potWinners = splitPot(
-      eligiblePlayers,
-      boardA,
-      boardB,
-      pot.amount
-    );
+    const potWinners = splitPot(eligiblePlayers, boardA, boardB, pot.amount);
 
     allWinners.push(...potWinners);
   }
 
-  potLogger.info({
-    totalWinners: allWinners.length,
-    totalDistributed: allWinners.reduce((sum, w) => sum + w.amount, 0),
-  }, "All side pots distributed");
+  potLogger.info(
+    {
+      totalWinners: allWinners.length,
+      totalDistributed: allWinners.reduce((sum, w) => sum + w.amount, 0),
+    },
+    "All side pots distributed",
+  );
 
   return allWinners;
 }

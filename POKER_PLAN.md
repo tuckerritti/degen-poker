@@ -11,42 +11,42 @@ Supabase Realtime provides three core features, and you will need all three for 
 **What it does:** Tracks who is currently "online" and looking at the socket connection.
 **Poker Use Case:**
 
-  * Showing "Player X is Online/Away" indicators at the table.
-  * Detecting when a player disconnects unexpectedly (so you can activate their "time bank" or fold their hand).
-  * **Crucial:** Do not use this for game logic (like "whose turn is it"). Use it only for UI status.
+- Showing "Player X is Online/Away" indicators at the table.
+- Detecting when a player disconnects unexpectedly (so you can activate their "time bank" or fold their hand).
+- **Crucial:** Do not use this for game logic (like "whose turn is it"). Use it only for UI status.
 
 #### B. Postgres Changes (The Dealer's Voice)
 
 **What it does:** Listens to your database. When a row is inserted, updated, or deleted, it instantly pushes that data to the client.
 **Poker Use Case:** This is your main game loop.
 
-  * **Public Game State:** When the board cards are dealt, the server updates the `games` table. All players subscribing to that game receive the update: `board: ['Ah', 'Kh', 'Td']`.
-  * **Player Actions:** When a player bets, they don't send a message to other players directly. They insert a row into an `actions` table. The database triggers calculate the new pot size, update the `games` table, and *that* update is broadcasted to everyone.
+- **Public Game State:** When the board cards are dealt, the server updates the `games` table. All players subscribing to that game receive the update: `board: ['Ah', 'Kh', 'Td']`.
+- **Player Actions:** When a player bets, they don't send a message to other players directly. They insert a row into an `actions` table. The database triggers calculate the new pot size, update the `games` table, and _that_ update is broadcasted to everyone.
 
 #### C. Broadcast (The Table Talk)
 
 **What it does:** Sends ephemeral messages between users without saving to the database. Low latency, but no history.
 **Poker Use Case:**
 
-  * Cursor tracking (seeing where opponents are looking).
-  * "Show one card" animations (if you want to show a card after folding without saving it to game history).
-  * Chat emojis/reactions.
+- Cursor tracking (seeing where opponents are looking).
+- "Show one card" animations (if you want to show a card after folding without saving it to game history).
+- Chat emojis/reactions.
 
------
+---
 
 ### 2\. How to Handle "Private Information" (Anti-Cheating)
 
 This is the most critical part. **You cannot send everyone's cards to the frontend and just "hide" them with CSS.** Tech-savvy users will open the network tab and see their opponent's cards.
 
 **The Solution: Row Level Security (RLS) with Realtime**
-Supabase Realtime respects RLS. This means if you set up your database policies correctly, Player A will *physically not receive* the data packet containing Player B's cards.
+Supabase Realtime respects RLS. This means if you set up your database policies correctly, Player A will _physically not receive_ the data packet containing Player B's cards.
 
-  * **Public Table (`games`):** Contains the pot, the board cards (Flop/Turn/River), and the current turn. RLS: `Select` policy allows `True` for everyone in the room.
-  * **Private Table (`player_hands`):** Contains the hole cards (e.g., `['As', 'Ks']`).
-      * **RLS Policy:** `auth.uid() == user_id`.
-      * **Result:** When the server deals cards, it inserts rows for every player. Player A's client only receives the "INSERT" event for their own hand. They get *no* data about Player B's hand.
+- **Public Table (`games`):** Contains the pot, the board cards (Flop/Turn/River), and the current turn. RLS: `Select` policy allows `True` for everyone in the room.
+- **Private Table (`player_hands`):** Contains the hole cards (e.g., `['As', 'Ks']`).
+  - **RLS Policy:** `auth.uid() == user_id`.
+  - **Result:** When the server deals cards, it inserts rows for every player. Player A's client only receives the "INSERT" event for their own hand. They get _no_ data about Player B's hand.
 
------
+---
 
 ### 3\. Architecture for "Variations" (Bomb Pots, Indian, etc.)
 
@@ -74,14 +74,14 @@ status: string ('active', 'showdown', 'complete')
 pot: integer
 current_player_id: uuid
 -- THE MAGIC PART:
-board_state: jsonb 
+board_state: jsonb
 ```
 
 **How `board_state` handles variations:**
 
-  * **Standard Hold'em:** `{"board1": ["Ah", "Kh", "7d"]}`
-  * **Double Board Bomb Pot:** `{"board1": ["Ah", "Kh", "7d"], "board2": ["2s", "9c", "Qd"]}`
-  * **3-Board:** `{"board1": [...], "board2": [...], "board3": [...]}`
+- **Standard Hold'em:** `{"board1": ["Ah", "Kh", "7d"]}`
+- **Double Board Bomb Pot:** `{"board1": ["Ah", "Kh", "7d"], "board2": ["2s", "9c", "Qd"]}`
+- **3-Board:** `{"board1": [...], "board2": [...], "board3": [...]}`
 
 **3. `player_hands` (Private Cards)**
 
@@ -91,9 +91,9 @@ user_id: uuid
 cards: jsonb -- ['As', 'Ks']
 ```
 
-  * **Indian Poker Logic:** For Indian Poker, you actually flip the RLS logic\! You need to see *everyone else's* cards but not your own. You would write a policy that says "Allow select if `auth.uid() != user_id`".
+- **Indian Poker Logic:** For Indian Poker, you actually flip the RLS logic\! You need to see _everyone else's_ cards but not your own. You would write a policy that says "Allow select if `auth.uid() != user_id`".
 
------
+---
 
 ### 4\. Step-by-Step: How Games Are Created & Played
 
@@ -110,17 +110,30 @@ User clicks "Create Table".
 #### Step 2: Joining & Subscribing
 
 1.  **Client (`/table/[id]`):**
+
     ```javascript
     // Listen for public game updates (pot, board, turn)
     const gameSub = supabase
-      .channel('public_game')
-      .on('postgres_changes', { event: 'UPDATE', table: 'games' }, handleGameUpdate)
+      .channel("public_game")
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", table: "games" },
+        handleGameUpdate,
+      )
       .subscribe();
 
     // Listen for MY cards (private)
     const handSub = supabase
-      .channel('my_hand')
-      .on('postgres_changes', { event: 'INSERT', table: 'player_hands', filter: `user_id=eq.${myUserId}` }, handleNewCards)
+      .channel("my_hand")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          table: "player_hands",
+          filter: `user_id=eq.${myUserId}`,
+        },
+        handleNewCards,
+      )
       .subscribe();
     ```
 
@@ -132,10 +145,10 @@ Use **Supabase Edge Functions** or **Database Triggers**.
 1.  **Action:** Player A clicks "Bet 100".
 2.  **Client:** `supabase.from('actions').insert({ game_id: 1, amount: 100, type: 'bet' })`.
 3.  **Database Trigger:**
-      * Validates the bet (does player have enough chips?).
-      * Updates `games` table (pot size increases).
-      * Calculates next player.
-      * Updates `games` table (current\_player\_id changes).
+    - Validates the bet (does player have enough chips?).
+    - Updates `games` table (pot size increases).
+    - Calculates next player.
+    - Updates `games` table (current_player_id changes).
 4.  **Realtime:** Sees the update to `games` table and broadcasts it to all clients. UI updates automatically.
 
 ### Summary

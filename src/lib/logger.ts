@@ -46,10 +46,14 @@ if (typeof window === "undefined") {
 
   createLogger = (module: string) => {
     return {
-      info: (data: any, message: string) => console.info(`[${module}] ${message}`, data),
-      debug: (data: any, message: string) => console.debug(`[${module}] ${message}`, data),
-      warn: (data: any, message: string) => console.warn(`[${module}] ${message}`, data),
-      error: (data: any, message: string) => console.error(`[${module}] ${message}`, data),
+      info: (data: any, message: string) =>
+        console.info(`[${module}] ${message}`, data),
+      debug: (data: any, message: string) =>
+        console.debug(`[${module}] ${message}`, data),
+      warn: (data: any, message: string) =>
+        console.warn(`[${module}] ${message}`, data),
+      error: (data: any, message: string) =>
+        console.error(`[${module}] ${message}`, data),
     };
   };
 }
@@ -73,32 +77,48 @@ export const logApiRoute = (method: string, path: string) => {
   const routeLogger = createLogger("api");
   return {
     start: (data?: Record<string, unknown>) => {
-      routeLogger.info({ method, path, ...data }, `${method} ${path} - Request started`);
+      routeLogger.info(
+        { method, path, ...data },
+        `${method} ${path} - Request started`,
+      );
     },
     info: (message: string, data?: Record<string, unknown>) => {
-      routeLogger.info({ method, path, ...data }, `${method} ${path} - ${message}`);
+      routeLogger.info(
+        { method, path, ...data },
+        `${method} ${path} - ${message}`,
+      );
     },
     debug: (message: string, data?: Record<string, unknown>) => {
-      routeLogger.debug({ method, path, ...data }, `${method} ${path} - ${message}`);
+      routeLogger.debug(
+        { method, path, ...data },
+        `${method} ${path} - ${message}`,
+      );
     },
     warn: (message: string, data?: Record<string, unknown>) => {
-      routeLogger.warn({ method, path, ...data }, `${method} ${path} - ${message}`);
+      routeLogger.warn(
+        { method, path, ...data },
+        `${method} ${path} - ${message}`,
+      );
     },
     success: (data?: Record<string, unknown>) => {
-      routeLogger.info({ method, path, ...data }, `${method} ${path} - Request successful`);
+      routeLogger.info(
+        { method, path, ...data },
+        `${method} ${path} - Request successful`,
+      );
     },
     error: (error: Error | unknown, data?: Record<string, unknown>) => {
-      const errorData = error instanceof Error
-        ? {
-            errorMessage: error.message,
-            errorStack: error.stack,
-            errorName: error.name,
-          }
-        : { errorString: String(error) };
+      const errorData =
+        error instanceof Error
+          ? {
+              errorMessage: error.message,
+              errorStack: error.stack,
+              errorName: error.name,
+            }
+          : { errorString: String(error) };
 
       routeLogger.error(
         { method, path, ...errorData, ...data },
-        `${method} ${path} - Request failed`
+        `${method} ${path} - Request failed`,
       );
     },
   };

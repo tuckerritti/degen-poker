@@ -43,7 +43,10 @@ export function useRoomPlayers(roomId: string | null) {
           setPlayers(data || []);
         }
       } catch (err) {
-        clientLogger.error("useRoomPlayers: Unexpected error", err instanceof Error ? err : new Error(String(err)));
+        clientLogger.error(
+          "useRoomPlayers: Unexpected error",
+          err instanceof Error ? err : new Error(String(err)),
+        );
         setError("Failed to fetch players");
       } finally {
         setLoading(false);
@@ -89,9 +92,7 @@ export function useRoomPlayers(roomId: string | null) {
             chipStack: updatedPlayer.chip_stack,
           });
           setPlayers((prev) =>
-            prev.map((p) =>
-              p.id === payload.new.id ? updatedPlayer : p,
-            ),
+            prev.map((p) => (p.id === payload.new.id ? updatedPlayer : p)),
           );
         },
       )

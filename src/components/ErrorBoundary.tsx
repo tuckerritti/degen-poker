@@ -54,7 +54,8 @@ export class ErrorBoundary extends Component<Props, State> {
               Something went wrong
             </h1>
             <p className="mb-4 text-gray-700">
-              An error occurred in the application. Please refresh the page to try again.
+              An error occurred in the application. Please refresh the page to
+              try again.
             </p>
             {this.state.error && (
               <details className="mb-4">

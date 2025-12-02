@@ -33,6 +33,7 @@ At any point in a betting round, a player may:
 In Pot-Limit Omaha, the **maximum raise** is limited by the pot size:
 
 **Formula:**
+
 ```
 Max Raise = Current Pot + Current Bet + Amount to Call
 
@@ -49,6 +50,7 @@ Max Raise Calculation:
 ```
 
 **Minimum Raise:**
+
 - Must be at least the size of the previous bet or raise
 - If first bet of the round, minimum is 1 chip (or big blind equivalent)
 
@@ -114,6 +116,7 @@ When a player is all-in for less than the current bet:
    - Only players who contributed to side pot can win it
 
 **Example:**
+
 ```
 Pot: 100 chips
 Player A (200 chips): Bets 50
@@ -129,6 +132,7 @@ Side Pot: (50 - 30) × 2 = 40 chips (A, C eligible)
 ### Current Pot Size
 
 At any point:
+
 ```
 Current Pot = Starting Pot + All Bets This Round + All Bets Previous Rounds
 ```
@@ -154,6 +158,7 @@ All bets are swept into the pot before next street is dealt.
 ### Incomplete Raise Rule
 
 If a player goes all-in for less than a full raise:
+
 - Players who already acted cannot re-raise
 - Betting is not reopened
 - Exception: If all-in equals or exceeds the minimum raise amount, betting reopens
@@ -188,21 +193,23 @@ If a player goes all-in for less than a full raise:
 ## Minimum/Maximum Bets
 
 ### Minimum Bet
+
 - First bet of any round: 1 chip (or small blind equivalent)
 - Raise: Must be at least the size of previous bet/raise
 
 ### Maximum Bet
+
 - Cannot exceed pot-limit calculation
 - Cannot bet more chips than you have (all-in)
 
 ## Summary of Key Differences from No-Limit
 
-| Rule | No-Limit Hold'em | Pot-Limit Omaha |
-|------|------------------|-----------------|
-| Max Bet | Any amount (all chips) | Limited to pot size |
-| Hole Cards | 2 cards, use 0-2 | 4 cards, must use exactly 2 |
-| Boards | 1 community board | 2 separate boards |
-| Pre-flop | Blinds + betting | Bomb pot (ante only) |
+| Rule       | No-Limit Hold'em       | Pot-Limit Omaha             |
+| ---------- | ---------------------- | --------------------------- |
+| Max Bet    | Any amount (all chips) | Limited to pot size         |
+| Hole Cards | 2 cards, use 0-2       | 4 cards, must use exactly 2 |
+| Boards     | 1 community board      | 2 separate boards           |
+| Pre-flop   | Blinds + betting       | Bomb pot (ante only)        |
 
 ## Implementation Notes
 
@@ -215,6 +222,7 @@ If a player goes all-in for less than a full raise:
 ### Action Validation
 
 Before accepting an action:
+
 1. Verify it's the player's turn
 2. Check action is valid (can't check if facing a bet)
 3. Validate raise amount meets minimum and doesn't exceed pot limit
@@ -223,6 +231,7 @@ Before accepting an action:
 ### Completing a Betting Round
 
 Round ends when:
+
 - `active_players.every(p => p.current_bet === highest_bet || p.has_folded || p.is_all_in)`
 - AND all players have had at least one opportunity to act
 - AND at least one player has bet OR all players have checked

@@ -32,7 +32,10 @@ export function generateSeed(): string {
  * Shuffles a deck using a deterministic seed (Fisher-Yates)
  */
 export function shuffleDeck(seed: string): string[] {
-  deckLogger.debug({ seed: seed.substring(0, 8) + "..." }, "Shuffling deck with seed");
+  deckLogger.debug(
+    { seed: seed.substring(0, 8) + "..." },
+    "Shuffling deck with seed",
+  );
   const deck = createDeck();
 
   // Verify deck has no nulls before shuffling
@@ -50,7 +53,10 @@ export function shuffleDeck(seed: string): string[] {
 
     // Bounds check to catch issues
     if (j < 0 || j > i) {
-      deckLogger.error({ i, j, rngValue, iPlus1: i + 1 }, "Invalid swap index!");
+      deckLogger.error(
+        { i, j, rngValue, iPlus1: i + 1 },
+        "Invalid swap index!",
+      );
       continue;
     }
 
@@ -63,7 +69,10 @@ export function shuffleDeck(seed: string): string[] {
   // Verify deck has no nulls after shuffling
   const nullsAfter = deck.filter((c) => c == null).length;
   if (nullsAfter > 0) {
-    deckLogger.error({ nullsAfter, sample: deck.slice(0, 20) }, "Deck has nulls after shuffling!");
+    deckLogger.error(
+      { nullsAfter, sample: deck.slice(0, 20) },
+      "Deck has nulls after shuffling!",
+    );
   }
 
   deckLogger.debug({ deckSize: deck.length }, "Deck shuffled successfully");

@@ -38,19 +38,27 @@ export function usePlayerHand(roomId: string | null, sessionId: string | null) {
           .maybeSingle();
 
         if (error) {
-          clientLogger.error("usePlayerHand: Error fetching player hand", error);
+          clientLogger.error(
+            "usePlayerHand: Error fetching player hand",
+            error,
+          );
           setError(error.message);
         } else {
           // IMPORTANT: Never log actual hole cards for security
           clientLogger.info("usePlayerHand: Player hand fetched", {
             roomId,
             hasHand: !!data,
-            cardCount: data?.cards ? (data.cards as unknown as string[]).length : 0,
+            cardCount: data?.cards
+              ? (data.cards as unknown as string[]).length
+              : 0,
           });
           setPlayerHand(data);
         }
       } catch (err) {
-        clientLogger.error("usePlayerHand: Unexpected error", err instanceof Error ? err : new Error(String(err)));
+        clientLogger.error(
+          "usePlayerHand: Unexpected error",
+          err instanceof Error ? err : new Error(String(err)),
+        );
         setError("Failed to fetch player hand");
       } finally {
         setLoading(false);
@@ -79,7 +87,10 @@ export function usePlayerHand(roomId: string | null, sessionId: string | null) {
           if (payload.eventType === "DELETE") {
             clientLogger.info("usePlayerHand: Hand deleted", { roomId });
             setPlayerHand(null);
-          } else if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
+          } else if (
+            payload.eventType === "INSERT" ||
+            payload.eventType === "UPDATE"
+          ) {
             setPlayerHand(payload.new as PlayerHand);
           }
         },

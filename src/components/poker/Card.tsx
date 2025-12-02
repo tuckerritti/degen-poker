@@ -88,10 +88,14 @@ export function Card({ card, faceDown = false, size = "md" }: CardProps) {
     >
       {/* Center - Rank and Suit */}
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
-        <div className={`${config.cornerRank} font-bold leading-none ${isRed ? "text-red-600" : "text-black"}`}>
+        <div
+          className={`${config.cornerRank} font-bold leading-none ${isRed ? "text-red-600" : "text-black"}`}
+        >
           {displayRank}
         </div>
-        <div className={`${config.centerSuit} ${isRed ? "text-red-600" : "text-black"}`}>
+        <div
+          className={`${config.centerSuit} ${isRed ? "text-red-600" : "text-black"}`}
+        >
           {suitSymbol}
         </div>
       </div>

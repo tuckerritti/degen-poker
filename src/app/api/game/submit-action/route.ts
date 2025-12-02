@@ -1,12 +1,20 @@
 import { NextResponse } from "next/server";
 import { getServerClient } from "@/lib/supabase/server";
 import { submitActionSchema } from "@/lib/validation/schemas";
-import { type ActionHistoryItem, type BoardState, type GameState } from "@/types/database";
+import {
+  type ActionHistoryItem,
+  type BoardState,
+  type GameState,
+} from "@/types/database";
 import type { Json } from "@/types/database.types";
 import { shuffleDeck } from "@/lib/poker/deck";
 import { z } from "zod";
 import { logApiRoute, createLogger } from "@/lib/logger";
-import { getBettingLimits, isValidBetAmount, shouldAutoDealToShowdown } from "@/lib/poker/betting";
+import {
+  getBettingLimits,
+  isValidBetAmount,
+  shouldAutoDealToShowdown,
+} from "@/lib/poker/betting";
 
 /**
  * Submit a player action to the queue
@@ -22,7 +30,7 @@ export async function POST(request: Request) {
     // Validation
     const validatedData = submitActionSchema.parse(body);
     const { roomId, sessionId, seatNumber, actionType } = validatedData;
-    const amount = 'amount' in validatedData ? validatedData.amount : undefined;
+    const amount = "amount" in validatedData ? validatedData.amount : undefined;
 
     const supabase = await getServerClient();
 
@@ -36,11 +44,12 @@ export async function POST(request: Request) {
       .single();
 
     if (playerError || !player) {
-      log.error(playerError || new Error("Player not found"), { roomId, sessionId, seatNumber });
-      return NextResponse.json(
-        { error: "Player not found" },
-        { status: 404 },
-      );
+      log.error(playerError || new Error("Player not found"), {
+        roomId,
+        sessionId,
+        seatNumber,
+      });
+      return NextResponse.json({ error: "Player not found" }, { status: 404 });
     }
 
     // Get current game state
@@ -52,10 +61,7 @@ export async function POST(request: Request) {
 
     if (gameError || !gameState) {
       log.error(gameError || new Error("No active game"), { roomId });
-      return NextResponse.json(
-        { error: "No active game" },
-        { status: 404 },
-      );
+      return NextResponse.json({ error: "No active game" }, { status: 404 });
     }
 
     // Verify it's this player's turn
@@ -65,10 +71,7 @@ export async function POST(request: Request) {
         seatNumber,
         currentActorSeat: gameState.current_actor_seat,
       });
-      return NextResponse.json(
-        { error: "Not your turn" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "Not your turn" }, { status: 400 });
     }
 
     log.info("Submitting action to queue", {
@@ -94,17 +97,19 @@ export async function POST(request: Request) {
 
     if (actionError) {
       log.error(actionError, { roomId, seatNumber, actionType });
-      return NextResponse.json(
-        { error: actionError.message },
-        { status: 500 },
-      );
+      return NextResponse.json({ error: actionError.message }, { status: 500 });
     }
 
     // Immediately process this action
     // In production, this could be done via a webhook or background job
     await processAction(action.id);
 
-    log.info("Action submitted successfully", { roomId, actionId: action.id, seatNumber, actionType });
+    log.info("Action submitted successfully", {
+      roomId,
+      actionId: action.id,
+      seatNumber,
+      actionType,
+    });
     return NextResponse.json({ action }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -140,7 +145,10 @@ async function processAction(actionId: string) {
 
   if (actionError || !action || action.processed || !action.game_state_id) {
     if (actionError) {
-      processLogger.error({ actionId, error: actionError }, "Failed to fetch action");
+      processLogger.error(
+        { actionId, error: actionError },
+        "Failed to fetch action",
+      );
     }
     return;
   }
@@ -182,13 +190,16 @@ async function processAction(actionId: string) {
   let playerHasFolded = player.has_folded ?? false;
   let newLastRaiseAmount = gameState.last_raise_amount ?? 0;
 
-  processLogger.info({
-    roomId: action.room_id,
-    seatNumber: action.seat_number,
-    actionType: action.action_type,
-    amount: action.amount,
-    phase: gameState.phase,
-  }, `Processing ${action.action_type} action`);
+  processLogger.info(
+    {
+      roomId: action.room_id,
+      seatNumber: action.seat_number,
+      actionType: action.action_type,
+      amount: action.amount,
+      phase: gameState.phase,
+    },
+    `Processing ${action.action_type} action`,
+  );
 
   switch (action.action_type) {
     case "fold":
@@ -200,11 +211,14 @@ async function processAction(actionId: string) {
       // No chips change
       if (newGameCurrentBet > newCurrentBet) {
         // Can't check when facing a bet
-        processLogger.warn({
-          seatNumber: action.seat_number,
-          currentBet: newCurrentBet,
-          requiredBet: newGameCurrentBet,
-        }, "Invalid check attempt - facing a bet");
+        processLogger.warn(
+          {
+            seatNumber: action.seat_number,
+            currentBet: newCurrentBet,
+            requiredBet: newGameCurrentBet,
+          },
+          "Invalid check attempt - facing a bet",
+        );
         await supabase
           .from("player_actions")
           .update({
@@ -227,21 +241,27 @@ async function processAction(actionId: string) {
       if (newChipStack === 0) {
         playerIsAllIn = true;
       }
-      processLogger.debug({
-        seatNumber: action.seat_number,
-        callAmount,
-        newChipStack,
-        isAllIn: playerIsAllIn,
-      }, "Player called");
+      processLogger.debug(
+        {
+          seatNumber: action.seat_number,
+          callAmount,
+          newChipStack,
+          isAllIn: playerIsAllIn,
+        },
+        "Player called",
+      );
       break;
 
     case "bet":
     case "raise":
       if (!action.amount || action.amount <= 0) {
-        processLogger.warn({
-          seatNumber: action.seat_number,
-          amount: action.amount,
-        }, "Invalid bet amount");
+        processLogger.warn(
+          {
+            seatNumber: action.seat_number,
+            amount: action.amount,
+          },
+          "Invalid bet amount",
+        );
         await supabase
           .from("player_actions")
           .update({
@@ -271,23 +291,29 @@ async function processAction(actionId: string) {
         gameState.current_bet ?? 0,
         gameState.pot_size ?? 0,
         gameState.last_raise_amount ?? room.big_blind,
-        room.big_blind
+        room.big_blind,
       );
 
       // Validate bet is within pot limits
       const isAllIn = action.amount >= player.chip_stack;
       if (!isValidBetAmount(action.amount, limits, isAllIn)) {
-        processLogger.warn({
-          seatNumber: action.seat_number,
-          amount: action.amount,
-          minBet: limits.minBet,
-          maxBet: limits.maxBet,
-          isAllIn,
-        }, "Bet amount violates pot limit");
-        await supabase.from("player_actions").update({
-          processed: true,
-          error_message: `Bet must be between ${limits.minBet} and ${limits.maxBet}`,
-        }).eq("id", actionId);
+        processLogger.warn(
+          {
+            seatNumber: action.seat_number,
+            amount: action.amount,
+            minBet: limits.minBet,
+            maxBet: limits.maxBet,
+            isAllIn,
+          },
+          "Bet amount violates pot limit",
+        );
+        await supabase
+          .from("player_actions")
+          .update({
+            processed: true,
+            error_message: `Bet must be between ${limits.minBet} and ${limits.maxBet}`,
+          })
+          .eq("id", actionId);
         return;
       }
 
@@ -304,7 +330,7 @@ async function processAction(actionId: string) {
       const raiseSize = totalBetAmount - (gameState.current_bet ?? 0);
       const minRaiseSize = Math.max(
         gameState.last_raise_amount ?? room.big_blind,
-        room.big_blind
+        room.big_blind,
       );
 
       // If all-in and doesn't meet min raise, it doesn't reopen betting
@@ -318,15 +344,18 @@ async function processAction(actionId: string) {
       if (newChipStack === 0) {
         playerIsAllIn = true;
       }
-      processLogger.debug({
-        seatNumber: action.seat_number,
-        totalBetAmount,
-        raiseSize,
-        reopensBetting,
-        newLastRaiseAmount,
-        newPotSize,
-        isAllIn: playerIsAllIn,
-      }, `Player ${action.action_type}`);
+      processLogger.debug(
+        {
+          seatNumber: action.seat_number,
+          totalBetAmount,
+          raiseSize,
+          reopensBetting,
+          newLastRaiseAmount,
+          newPotSize,
+          isAllIn: playerIsAllIn,
+        },
+        `Player ${action.action_type}`,
+      );
       break;
 
     case "all_in":
@@ -337,16 +366,19 @@ async function processAction(actionId: string) {
       newGameCurrentBet = Math.max(newGameCurrentBet, newCurrentBet);
       newLastAggressor = action.seat_number;
       playerIsAllIn = true;
-      processLogger.info({
-        seatNumber: action.seat_number,
-        allInAmount,
-        newPotSize,
-      }, "Player went all-in");
+      processLogger.info(
+        {
+          seatNumber: action.seat_number,
+          allInAmount,
+          newPotSize,
+        },
+        "Player went all-in",
+      );
       break;
   }
 
   // Calculate chips actually added to pot this action
-  const chipsAdded = (player.chip_stack - newChipStack);
+  const chipsAdded = player.chip_stack - newChipStack;
 
   // Update player
   await supabase
@@ -354,7 +386,8 @@ async function processAction(actionId: string) {
     .update({
       chip_stack: newChipStack,
       current_bet: newCurrentBet,
-      total_invested_this_hand: (player.total_invested_this_hand ?? 0) + chipsAdded,
+      total_invested_this_hand:
+        (player.total_invested_this_hand ?? 0) + chipsAdded,
       is_all_in: playerIsAllIn,
       has_folded: playerHasFolded,
     })
@@ -371,16 +404,19 @@ async function processAction(actionId: string) {
 
   // Check if auto-deal is needed (no more action possible)
   if (shouldAutoDealToShowdown(players)) {
-    processLogger.info({
-      roomId: action.room_id,
-      phase: gameState.phase,
-      potSize: newPotSize,
-    }, "No more action possible - auto-dealing to showdown");
+    processLogger.info(
+      {
+        roomId: action.room_id,
+        phase: gameState.phase,
+        potSize: newPotSize,
+      },
+      "No more action possible - auto-dealing to showdown",
+    );
 
     // Get deck and calculate card indices (reuse existing logic)
     const currentBoardState = (gameState.board_state as BoardState) || {
       board1: [],
-      board2: []
+      board2: [],
     };
     const board1 = currentBoardState.board1 || [];
     const board2 = currentBoardState.board2 || [];
@@ -400,7 +436,7 @@ async function processAction(actionId: string) {
       cardIndex,
       board1,
       board2,
-      burnedCards
+      burnedCards,
     );
 
     // Reset betting state for all players
@@ -415,7 +451,8 @@ async function processAction(actionId: string) {
       board2: dealResult.board2,
     };
 
-    const actionHistory = (gameState.action_history as ActionHistoryItem[] | null) ?? [];
+    const actionHistory =
+      (gameState.action_history as ActionHistoryItem[] | null) ?? [];
     const newActionHistory: ActionHistoryItem[] = [
       ...actionHistory,
       {
@@ -438,7 +475,7 @@ async function processAction(actionId: string) {
         seats_to_act: [],
         seats_acted: [],
         action_history: newActionHistory as unknown as Json,
-        phase: 'showdown',
+        phase: "showdown",
         board_state: updatedBoardState as unknown as Json,
         burned_card_indices: dealResult.burnedCards,
       })
@@ -450,12 +487,15 @@ async function processAction(actionId: string) {
       .update({ processed: true, processed_at: new Date().toISOString() })
       .eq("id", actionId);
 
-    processLogger.info({
-      roomId: action.room_id,
-      potSize: newPotSize,
-      board1: dealResult.board1,
-      board2: dealResult.board2,
-    }, "Auto-dealt to showdown - awaiting normal resolution");
+    processLogger.info(
+      {
+        roomId: action.room_id,
+        potSize: newPotSize,
+        board1: dealResult.board1,
+        board2: dealResult.board2,
+      },
+      "Auto-dealt to showdown - awaiting normal resolution",
+    );
 
     return; // Exit early - showdown handled by normal flow
   }
@@ -471,19 +511,23 @@ async function processAction(actionId: string) {
   if (remainingPlayers.length === 1) {
     // Award pot to the last remaining player
     const winner = remainingPlayers[0];
-    processLogger.info({
-      roomId: action.room_id,
-      winnerSeat: winner.seat_number,
-      potSize: newPotSize,
-    }, "All other players folded - awarding pot to remaining player");
+    processLogger.info(
+      {
+        roomId: action.room_id,
+        winnerSeat: winner.seat_number,
+        potSize: newPotSize,
+      },
+      "All other players folded - awarding pot to remaining player",
+    );
 
     // Update winner's chip stack
     await supabase
       .from("room_players")
       .update({
-        chip_stack: winner.seat_number === player.seat_number
-          ? newChipStack + newPotSize  // If the winner is the player who just acted
-          : winner.chip_stack + newPotSize,  // Otherwise use their current stack
+        chip_stack:
+          winner.seat_number === player.seat_number
+            ? newChipStack + newPotSize // If the winner is the player who just acted
+            : winner.chip_stack + newPotSize, // Otherwise use their current stack
         current_bet: 0,
         total_invested_this_hand: 0,
         has_folded: false,
@@ -504,20 +548,25 @@ async function processAction(actionId: string) {
       .neq("id", winner.id);
 
     // Archive hand result
-    const boardState = (gameState.board_state as BoardState) || { board1: [], board2: [] };
+    const boardState = (gameState.board_state as BoardState) || {
+      board1: [],
+      board2: [],
+    };
     await supabase.from("hand_results").insert({
       room_id: action.room_id,
       hand_number: gameState.hand_number,
       final_pot: newPotSize,
       board_a: boardState.board1 || [],
       board_b: boardState.board2 || [],
-      winners: [{
-        seat: winner.seat_number,
-        amount: newPotSize,
-        board: "N/A",
-        hand_rank: 0,
-        hand_description: "Won by fold - all other players folded",
-      }],
+      winners: [
+        {
+          seat: winner.seat_number,
+          amount: newPotSize,
+          board: "N/A",
+          hand_rank: 0,
+          hand_description: "Won by fold - all other players folded",
+        },
+      ],
       shown_hands: {},
       action_history: gameState.action_history,
     });
@@ -529,10 +578,7 @@ async function processAction(actionId: string) {
       .eq("game_state_id", gameState.id);
 
     // Delete game state (triggers real-time event for clients)
-    await supabase
-      .from("game_states")
-      .delete()
-      .eq("id", gameState.id);
+    await supabase.from("game_states").delete().eq("id", gameState.id);
 
     // Mark action as processed
     await supabase
@@ -540,11 +586,14 @@ async function processAction(actionId: string) {
       .update({ processed: true, processed_at: new Date().toISOString() })
       .eq("id", actionId);
 
-    processLogger.info({
-      roomId: action.room_id,
-      winnerSeat: winner.seat_number,
-      potAwarded: newPotSize,
-    }, "Hand ended by fold");
+    processLogger.info(
+      {
+        roomId: action.room_id,
+        winnerSeat: winner.seat_number,
+        potAwarded: newPotSize,
+      },
+      "Hand ended by fold",
+    );
 
     return;
   }
@@ -571,22 +620,32 @@ async function processAction(actionId: string) {
   );
 
   // If this was a valid raise (bet increased), reopen betting to players who already acted
-  if (newGameCurrentBet > (gameState.current_bet ?? 0) && newLastRaiseAmount > (gameState.last_raise_amount ?? 0)) {
+  if (
+    newGameCurrentBet > (gameState.current_bet ?? 0) &&
+    newLastRaiseAmount > (gameState.last_raise_amount ?? 0)
+  ) {
     // Add all active players except current actor back to seats_to_act
-    const activePlayers = players.filter(p => !p.has_folded && !p.is_all_in && p.seat_number !== action.seat_number);
-    newSeatsToAct = activePlayers.map(p => p.seat_number);
+    const activePlayers = players.filter(
+      (p) =>
+        !p.has_folded && !p.is_all_in && p.seat_number !== action.seat_number,
+    );
+    newSeatsToAct = activePlayers.map((p) => p.seat_number);
     newSeatsActed = [action.seat_number]; // Reset to just the raiser
-    processLogger.info({
-      roomId: action.room_id,
-      raisingSeat: action.seat_number,
-      newBet: newGameCurrentBet,
-      reopenedTo: newSeatsToAct,
-    }, "Raise reopened betting");
+    processLogger.info(
+      {
+        roomId: action.room_id,
+        raisingSeat: action.seat_number,
+        newBet: newGameCurrentBet,
+        reopenedTo: newSeatsToAct,
+      },
+      "Raise reopened betting",
+    );
   }
 
   // Determine next actor
   const activePlayers = players.filter(
-    (p) => !p.has_folded && !p.is_all_in && p.seat_number !== action.seat_number,
+    (p) =>
+      !p.has_folded && !p.is_all_in && p.seat_number !== action.seat_number,
   );
 
   // Check if betting round is complete
@@ -599,7 +658,10 @@ async function processAction(actionId: string) {
   let nextActor = null;
 
   // Extract current board state from JSONB (per POKER_PLAN.md)
-  const currentBoardState = (gameState.board_state as BoardState) || { board1: [], board2: [] };
+  const currentBoardState = (gameState.board_state as BoardState) || {
+    board1: [],
+    board2: [],
+  };
   let board1 = currentBoardState.board1 || [];
   let board2 = currentBoardState.board2 || [];
 
@@ -616,12 +678,15 @@ async function processAction(actionId: string) {
   const burnedCardsCount = burnedCards.length;
   let cardIndex = holeCardsDealt + burnedCardsCount + boardCardsDealt;
 
-  processLogger.debug({
-    holeCardsDealt,
-    boardCardsDealt,
-    burnedCardsCount,
-    nextCardIndex: cardIndex,
-  }, "Calculating next card index");
+  processLogger.debug(
+    {
+      holeCardsDealt,
+      boardCardsDealt,
+      burnedCardsCount,
+      nextCardIndex: cardIndex,
+    },
+    "Calculating next card index",
+  );
 
   // Define these before the if block so they're in scope for the update statement
   const nonFoldedPlayers = players.filter((p) => !p.has_folded);
@@ -639,11 +704,14 @@ async function processAction(actionId: string) {
     newGameCurrentBet = 0;
     newLastRaiseAmount = 0;
 
-    processLogger.info({
-      roomId: action.room_id,
-      currentPhase: gameState.phase,
-      potSize: newPotSize,
-    }, "Betting round complete - advancing to next phase");
+    processLogger.info(
+      {
+        roomId: action.room_id,
+        currentPhase: gameState.phase,
+        potSize: newPotSize,
+      },
+      "Betting round complete - advancing to next phase",
+    );
 
     if (gameState.phase === "flop") {
       // Deal turn - add actual card strings (per POKER_PLAN.md)
@@ -651,29 +719,38 @@ async function processAction(actionId: string) {
       board1 = [...board1, deck[cardIndex++]];
       board2 = [...board2, deck[cardIndex++]];
       nextPhase = "turn";
-      processLogger.info({
-        roomId: action.room_id,
-        board1Count: board1.length,
-        board2Count: board2.length,
-      }, "Dealt turn cards");
+      processLogger.info(
+        {
+          roomId: action.room_id,
+          board1Count: board1.length,
+          board2Count: board2.length,
+        },
+        "Dealt turn cards",
+      );
     } else if (gameState.phase === "turn") {
       // Deal river - add actual card strings (per POKER_PLAN.md)
       burnedCards.push(cardIndex++);
       board1 = [...board1, deck[cardIndex++]];
       board2 = [...board2, deck[cardIndex++]];
       nextPhase = "river";
-      processLogger.info({
-        roomId: action.room_id,
-        board1Count: board1.length,
-        board2Count: board2.length,
-      }, "Dealt river cards");
+      processLogger.info(
+        {
+          roomId: action.room_id,
+          board1Count: board1.length,
+          board2Count: board2.length,
+        },
+        "Dealt river cards",
+      );
     } else if (gameState.phase === "river") {
       // Go to showdown
       nextPhase = "showdown";
-      processLogger.info({
-        roomId: action.room_id,
-        finalPot: newPotSize,
-      }, "Moving to showdown");
+      processLogger.info(
+        {
+          roomId: action.room_id,
+          finalPot: newPotSize,
+        },
+        "Moving to showdown",
+      );
     }
 
     if (nextPhase !== "showdown") {
@@ -734,7 +811,12 @@ async function processAction(actionId: string) {
       action_deadline_at: nextActor
         ? new Date(Date.now() + 30000).toISOString()
         : null,
-      seats_to_act: nextPhase !== gameState.phase ? nonFoldedPlayers.filter(p => !p.is_all_in).map(p => p.seat_number) : newSeatsToAct,
+      seats_to_act:
+        nextPhase !== gameState.phase
+          ? nonFoldedPlayers
+              .filter((p) => !p.is_all_in)
+              .map((p) => p.seat_number)
+          : newSeatsToAct,
       seats_acted: nextPhase !== gameState.phase ? [] : newSeatsActed,
       action_history: newActionHistory as unknown as Json,
       phase: nextPhase,
@@ -774,9 +856,9 @@ async function autoDealToShowdown(
   cardIndex: number,
   board1: string[],
   board2: string[],
-  burnedCards: number[]
+  burnedCards: number[],
 ): Promise<{
-  phase: 'showdown';
+  phase: "showdown";
   board1: string[];
   board2: string[];
   burnedCards: number[];
@@ -784,12 +866,15 @@ async function autoDealToShowdown(
 }> {
   const processLogger = createLogger("auto-deal-to-showdown");
 
-  processLogger.info({
-    roomId: gameState.room_id,
-    currentPhase: gameState.phase,
-    board1Count: board1.length,
-    board2Count: board2.length,
-  }, "Auto-dealing remaining cards - all players all-in");
+  processLogger.info(
+    {
+      roomId: gameState.room_id,
+      currentPhase: gameState.phase,
+      board1Count: board1.length,
+      board2Count: board2.length,
+    },
+    "Auto-dealing remaining cards - all players all-in",
+  );
 
   let currentCardIndex = cardIndex;
   const updatedBoard1 = [...board1];
@@ -797,37 +882,46 @@ async function autoDealToShowdown(
   const updatedBurnedCards = [...burnedCards];
 
   // Deal turn if we're on flop
-  if (gameState.phase === 'flop') {
+  if (gameState.phase === "flop") {
     updatedBurnedCards.push(currentCardIndex++);
     updatedBoard1.push(deck[currentCardIndex++]);
     updatedBoard2.push(deck[currentCardIndex++]);
 
-    processLogger.debug({
-      board1Count: updatedBoard1.length,
-      board2Count: updatedBoard2.length,
-    }, "Auto-dealt turn");
+    processLogger.debug(
+      {
+        board1Count: updatedBoard1.length,
+        board2Count: updatedBoard2.length,
+      },
+      "Auto-dealt turn",
+    );
   }
 
   // Deal river if we're on flop or turn
-  if (gameState.phase === 'flop' || gameState.phase === 'turn') {
+  if (gameState.phase === "flop" || gameState.phase === "turn") {
     updatedBurnedCards.push(currentCardIndex++);
     updatedBoard1.push(deck[currentCardIndex++]);
     updatedBoard2.push(deck[currentCardIndex++]);
 
-    processLogger.debug({
-      board1Count: updatedBoard1.length,
-      board2Count: updatedBoard2.length,
-    }, "Auto-dealt river");
+    processLogger.debug(
+      {
+        board1Count: updatedBoard1.length,
+        board2Count: updatedBoard2.length,
+      },
+      "Auto-dealt river",
+    );
   }
 
-  processLogger.info({
-    roomId: gameState.room_id,
-    finalBoard1: updatedBoard1,
-    finalBoard2: updatedBoard2,
-  }, "All cards dealt - advancing to showdown");
+  processLogger.info(
+    {
+      roomId: gameState.room_id,
+      finalBoard1: updatedBoard1,
+      finalBoard2: updatedBoard2,
+    },
+    "All cards dealt - advancing to showdown",
+  );
 
   return {
-    phase: 'showdown',
+    phase: "showdown",
     board1: updatedBoard1,
     board2: updatedBoard2,
     burnedCards: updatedBurnedCards,

@@ -1,4 +1,5 @@
-const isDevelopment = typeof window !== "undefined" && process.env.NODE_ENV === "development";
+const isDevelopment =
+  typeof window !== "undefined" && process.env.NODE_ENV === "development";
 
 /**
  * Client-side logger for browser environments
@@ -7,7 +8,7 @@ const isDevelopment = typeof window !== "undefined" && process.env.NODE_ENV === 
 export const clientLogger = {
   debug: (message: string, data?: Record<string, unknown>) => {
     if (isDevelopment) {
-      console.debug(`[DEBUG] ${message}`, data ||"");
+      console.debug(`[DEBUG] ${message}`, data || "");
     }
   },
   info: (message: string, data?: Record<string, unknown>) => {

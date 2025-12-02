@@ -32,7 +32,7 @@ export function PokerTable({
 }: PokerTableProps) {
   // Detect mobile viewport
   const [isMobile, setIsMobile] = useState(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       return window.matchMedia("(max-width: 640px)").matches;
     }
     return false;
@@ -47,9 +47,7 @@ export function PokerTable({
 
   // Get seated players (not spectators)
   const seatedPlayers = players.filter((p) => !p.is_spectating);
-  const occupiedSeats = new Map(
-    seatedPlayers.map((p) => [p.seat_number, p]),
-  );
+  const occupiedSeats = new Map(seatedPlayers.map((p) => [p.seat_number, p]));
 
   // Check if current user already has a seat
   const userHasSeat = seatedPlayers.some((p) => p.id === myPlayerId);
@@ -134,9 +132,11 @@ export function PokerTable({
                     ? "border-whiskey-gold bg-whiskey-gold/20"
                     : "border-white/20 bg-black/40"
               } ${
-                isCurrentActor ? "ring-2 sm:ring-4 ring-whiskey-gold ring-offset-1 sm:ring-offset-2 ring-offset-royal-blue glow-gold" : ""
+                isCurrentActor
+                  ? "ring-2 sm:ring-4 ring-whiskey-gold ring-offset-1 sm:ring-offset-2 ring-offset-royal-blue glow-gold"
+                  : ""
               }`}
-              style={{ fontFamily: 'Lato, sans-serif' }}
+              style={{ fontFamily: "Lato, sans-serif" }}
             >
               {isEmpty ? (
                 <div className="text-center">
@@ -144,7 +144,9 @@ export function PokerTable({
                     Seat {seatNumber + 1}
                   </div>
                   {!userHasSeat && (
-                    <div className="text-xs text-cigar-ash hidden sm:block">Click to sit</div>
+                    <div className="text-xs text-cigar-ash hidden sm:block">
+                      Click to sit
+                    </div>
                   )}
                 </div>
               ) : (
@@ -152,7 +154,10 @@ export function PokerTable({
                   <div className="text-xs sm:text-sm font-bold text-cream-parchment truncate">
                     {player.display_name}
                   </div>
-                  <div className="mt-1 text-base sm:text-lg font-bold text-whiskey-gold" style={{ fontFamily: 'Roboto Mono, monospace' }}>
+                  <div
+                    className="mt-1 text-base sm:text-lg font-bold text-whiskey-gold"
+                    style={{ fontFamily: "Roboto Mono, monospace" }}
+                  >
                     ${player.chip_stack}
                   </div>
                   {player.has_folded && (
@@ -170,46 +175,76 @@ export function PokerTable({
             </div>
 
             {/* Current bet chips in front of player */}
-            {!isEmpty && (player.current_bet ?? 0) > 0 && !player.has_folded && (
-              <div className="mt-1 sm:mt-2 rounded bg-whiskey-gold px-1.5 sm:px-2 py-0.5 sm:py-1 text-xs font-bold text-tokyo-night shadow-lg" style={{ fontFamily: 'Roboto Mono, monospace' }}>
-                ${player.current_bet}
-              </div>
-            )}
+            {!isEmpty &&
+              (player.current_bet ?? 0) > 0 &&
+              !player.has_folded && (
+                <div
+                  className="mt-1 sm:mt-2 rounded bg-whiskey-gold px-1.5 sm:px-2 py-0.5 sm:py-1 text-xs font-bold text-tokyo-night shadow-lg"
+                  style={{ fontFamily: "Roboto Mono, monospace" }}
+                >
+                  ${player.current_bet}
+                </div>
+              )}
 
             {/* Dealer button */}
             {hasButton && (
               <div className="absolute -right-2 -top-2 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-cream-parchment border-2 border-mahogany shadow-lg">
-                <span className="text-sm font-bold text-mahogany" style={{ fontFamily: 'Cinzel, serif' }}>D</span>
+                <span
+                  className="text-sm font-bold text-mahogany"
+                  style={{ fontFamily: "Cinzel, serif" }}
+                >
+                  D
+                </span>
               </div>
             )}
 
             {/* Small Blind indicator */}
             {isSmallBlind && !hasButton && (
               <div className="absolute -left-2 -top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-royal-blue border-2 border-whiskey-gold shadow-lg">
-                <span className="text-xs font-bold text-whiskey-gold" style={{ fontFamily: 'Lato, sans-serif' }}>SB</span>
+                <span
+                  className="text-xs font-bold text-whiskey-gold"
+                  style={{ fontFamily: "Lato, sans-serif" }}
+                >
+                  SB
+                </span>
               </div>
             )}
 
             {/* Big Blind indicator */}
             {isBigBlind && !hasButton && (
               <div className="absolute -left-2 -top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-royal-blue border-2 border-whiskey-gold shadow-lg">
-                <span className="text-xs font-bold text-whiskey-gold" style={{ fontFamily: 'Lato, sans-serif' }}>BB</span>
+                <span
+                  className="text-xs font-bold text-whiskey-gold"
+                  style={{ fontFamily: "Lato, sans-serif" }}
+                >
+                  BB
+                </span>
               </div>
             )}
 
             {/* Player Hole Cards - shown above seat */}
             {!isEmpty && phase && !player.has_folded && (
-              <div className={`absolute left-1/2 -translate-x-1/2 ${isMyPlayer && myHoleCards.length > 0 ? '-top-20 sm:-top-28 z-10' : '-top-16 sm:-top-20 z-0'}`}>
+              <div
+                className={`absolute left-1/2 -translate-x-1/2 ${isMyPlayer && myHoleCards.length > 0 ? "-top-20 sm:-top-28 z-10" : "-top-16 sm:-top-20 z-0"}`}
+              >
                 {isMyPlayer && myHoleCards.length > 0 ? (
                   // My cards: spread out horizontally
                   <div className="flex gap-0.5 sm:gap-1">
-                    {myHoleCards.filter((card) => card != null).map((card, index) => (
-                      <Card key={index} card={card} size="md" />
-                    ))}
+                    {myHoleCards
+                      .filter((card) => card != null)
+                      .map((card, index) => (
+                        <Card key={index} card={card} size="md" />
+                      ))}
                   </div>
                 ) : (
                   // Other players: fanned out face-down cards
-                  <div className="relative flex items-center justify-center" style={{ width: isMobile ? '80px' : '100px', height: isMobile ? '52px' : '64px' }}>
+                  <div
+                    className="relative flex items-center justify-center"
+                    style={{
+                      width: isMobile ? "80px" : "100px",
+                      height: isMobile ? "52px" : "64px",
+                    }}
+                  >
                     {[0, 1, 2, 3].map((cardIndex) => {
                       const rotation = (cardIndex - 1.5) * 8; // -12deg, -4deg, 4deg, 12deg
                       const xOffset = (cardIndex - 1.5) * (isMobile ? 12 : 16); // Horizontal spacing
@@ -239,13 +274,21 @@ export function PokerTable({
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-2">
         {/* Community Cards */}
         {boardA.length > 0 && phase && (
-          <CommunityCards boardA={boardA} boardB={boardB} phase={phase} />
+          <CommunityCards
+            boardA={boardA}
+            boardB={boardB}
+            phase={phase}
+            myHoleCards={myHoleCards}
+          />
         )}
 
         {/* Pot Display */}
         <div className="glass rounded-lg px-3 sm:px-4 py-1 sm:py-1.5 border border-whiskey-gold/30 shadow-lg">
           <div className="text-center">
-            <div className="text-base sm:text-xl font-bold text-whiskey-gold glow-gold" style={{ fontFamily: 'Roboto Mono, monospace' }}>
+            <div
+              className="text-base sm:text-xl font-bold text-whiskey-gold glow-gold"
+              style={{ fontFamily: "Roboto Mono, monospace" }}
+            >
               ${potSize}
             </div>
           </div>

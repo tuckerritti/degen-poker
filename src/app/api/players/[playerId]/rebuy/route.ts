@@ -88,10 +88,7 @@ export async function POST(
 
     if (updateError) {
       log.error(updateError, { playerId, amount });
-      return NextResponse.json(
-        { error: updateError.message },
-        { status: 500 },
-      );
+      return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
     log.info("Rebuy successful", {
@@ -110,7 +107,9 @@ export async function POST(
         { status: 400 },
       );
     }
-    log.error(error instanceof Error ? error : new Error(String(error)), { playerId });
+    log.error(error instanceof Error ? error : new Error(String(error)), {
+      playerId,
+    });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

@@ -6,7 +6,10 @@ import { logApiRoute } from "@/lib/logger";
 const joinRoomSchema = z
   .object({
     sessionId: z.string().min(1, "Session ID is required"),
-    displayName: z.string().min(1, "Display name is required").max(20, "Display name must be 20 characters or less"),
+    displayName: z
+      .string()
+      .min(1, "Display name is required")
+      .max(20, "Display name must be 20 characters or less"),
     seatNumber: z.number().int().min(0).max(11).optional(),
     buyInAmount: z.number().positive().optional(),
     isSpectating: z.boolean().default(false),
@@ -22,7 +25,7 @@ const joinRoomSchema = z
     {
       message: "Seat number and buy-in amount required for players",
       path: ["seatNumber"],
-    }
+    },
   );
 
 export async function POST(
@@ -105,10 +108,7 @@ export async function POST(
         .eq("is_spectating", false);
 
       if (count && count >= room.max_players) {
-        return NextResponse.json(
-          { error: "Table is full" },
-          { status: 409 },
-        );
+        return NextResponse.json({ error: "Table is full" }, { status: 409 });
       }
     }
 
@@ -170,7 +170,9 @@ export async function POST(
         { status: 400 },
       );
     }
-    log.error(error instanceof Error ? error : new Error(String(error)), { roomId });
+    log.error(error instanceof Error ? error : new Error(String(error)), {
+      roomId,
+    });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

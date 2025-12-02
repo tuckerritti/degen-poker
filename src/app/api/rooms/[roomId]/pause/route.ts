@@ -55,20 +55,14 @@ export async function POST(
 
     if (updateError) {
       log.error(updateError, { roomId, sessionId });
-      return NextResponse.json(
-        { error: updateError.message },
-        { status: 500 },
-      );
+      return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
-    log.info(
-      `Game ${updatedRoom.is_paused ? "paused" : "unpaused"}`,
-      {
-        roomId,
-        sessionId,
-        isPaused: updatedRoom.is_paused,
-      },
-    );
+    log.info(`Game ${updatedRoom.is_paused ? "paused" : "unpaused"}`, {
+      roomId,
+      sessionId,
+      isPaused: updatedRoom.is_paused,
+    });
 
     return NextResponse.json({ room: updatedRoom }, { status: 200 });
   } catch (error) {

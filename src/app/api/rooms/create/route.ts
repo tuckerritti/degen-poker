@@ -33,7 +33,8 @@ export async function POST(request: Request) {
 
     // Validation
     const validatedData = createRoomSchema.parse(body);
-    const { sessionId, smallBlind, bigBlind, minBuyIn, maxBuyIn } = validatedData;
+    const { sessionId, smallBlind, bigBlind, minBuyIn, maxBuyIn } =
+      validatedData;
 
     const supabase = await getServerClient();
 

@@ -25,7 +25,9 @@ export function useGameState(roomId: string | null) {
     // Initial fetch
     const fetchInitial = async () => {
       try {
-        clientLogger.debug("useGameState: Fetching initial game state", { roomId });
+        clientLogger.debug("useGameState: Fetching initial game state", {
+          roomId,
+        });
         const { data, error } = await supabase
           .from("game_states")
           .select("*")
@@ -38,7 +40,10 @@ export function useGameState(roomId: string | null) {
             clientLogger.info("useGameState: No active hand", { roomId });
             setGameState(null);
           } else {
-            clientLogger.error("useGameState: Error fetching game state", error);
+            clientLogger.error(
+              "useGameState: Error fetching game state",
+              error,
+            );
             setError(error.message);
           }
         } else {
@@ -50,7 +55,10 @@ export function useGameState(roomId: string | null) {
           setGameState(data);
         }
       } catch (err) {
-        clientLogger.error("useGameState: Unexpected error", err instanceof Error ? err : new Error(String(err)));
+        clientLogger.error(
+          "useGameState: Unexpected error",
+          err instanceof Error ? err : new Error(String(err)),
+        );
         setError("Failed to fetch game state");
       } finally {
         setLoading(false);
@@ -74,7 +82,10 @@ export function useGameState(roomId: string | null) {
           clientLogger.info("useGameState: Real-time update received", {
             roomId,
             eventType: payload.eventType,
-            phase: payload.eventType !== "DELETE" ? (payload.new as GameState).phase : undefined,
+            phase:
+              payload.eventType !== "DELETE"
+                ? (payload.new as GameState).phase
+                : undefined,
           });
           if (payload.eventType === "DELETE") {
             clientLogger.info("useGameState: Hand ended", { roomId });

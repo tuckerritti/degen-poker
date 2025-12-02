@@ -4,7 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/hooks/useSession";
 
-type GameMode = "double-board-plo" | "indian-poker" | "holdem-flips" | "321" | "54321";
+type GameMode =
+  | "double-board-plo"
+  | "indian-poker"
+  | "holdem-flips"
+  | "321"
+  | "54321";
 
 interface GameModeConfig {
   id: GameMode;
@@ -43,7 +48,8 @@ const GAME_MODES: GameModeConfig[] = [
 export default function Home() {
   const router = useRouter();
   const { sessionId } = useSession();
-  const [selectedMode, setSelectedMode] = useState<GameMode>("double-board-plo");
+  const [selectedMode, setSelectedMode] =
+    useState<GameMode>("double-board-plo");
   const [isCreating, setIsCreating] = useState(false);
 
   // Create room form state
@@ -56,7 +62,7 @@ export default function Home() {
     e.preventDefault();
     if (!sessionId) return;
 
-    const selectedConfig = GAME_MODES.find(mode => mode.id === selectedMode);
+    const selectedConfig = GAME_MODES.find((mode) => mode.id === selectedMode);
     if (!selectedConfig?.enabled) return;
 
     setIsCreating(true);
@@ -93,13 +99,19 @@ export default function Home() {
     <div className="flex min-h-screen items-center justify-center bg-tokyo-night p-4">
       <main className="w-full max-w-4xl">
         <div className="mb-6 sm:mb-8 text-center">
-          <h1 className="mb-2 text-4xl sm:text-6xl font-bold text-cream-parchment glow-gold" style={{ fontFamily: 'Cinzel, serif' }}>
+          <h1
+            className="mb-2 text-4xl sm:text-6xl font-bold text-cream-parchment glow-gold"
+            style={{ fontFamily: "Cinzel, serif" }}
+          >
             DEGEN POKER
           </h1>
         </div>
 
         <div className="glass rounded-lg p-4 sm:p-8 shadow-2xl">
-          <h2 className="mb-4 sm:mb-6 text-xl sm:text-2xl font-bold text-cream-parchment" style={{ fontFamily: 'Playfair Display, serif' }}>
+          <h2
+            className="mb-4 sm:mb-6 text-xl sm:text-2xl font-bold text-cream-parchment"
+            style={{ fontFamily: "Playfair Display, serif" }}
+          >
             Select Game Mode
           </h2>
 
@@ -117,7 +129,10 @@ export default function Home() {
                       : "border-white/5 bg-black/10 cursor-not-allowed opacity-40"
                 }`}
               >
-                <h3 className={`text-sm sm:text-base font-bold ${selectedMode === mode.id && mode.enabled ? 'text-whiskey-gold' : 'text-cream-parchment'}`} style={{ fontFamily: 'Lato, sans-serif' }}>
+                <h3
+                  className={`text-sm sm:text-base font-bold ${selectedMode === mode.id && mode.enabled ? "text-whiskey-gold" : "text-cream-parchment"}`}
+                  style={{ fontFamily: "Lato, sans-serif" }}
+                >
                   {mode.name}
                 </h3>
                 {!mode.enabled && (
@@ -132,7 +147,10 @@ export default function Home() {
           <form onSubmit={handleCreateRoom} className="space-y-3 sm:space-y-4">
             <div className="grid grid-cols-2 gap-3 sm:gap-4">
               <div>
-                <label className="block text-sm font-medium text-cigar-ash" style={{ fontFamily: 'Lato, sans-serif' }}>
+                <label
+                  className="block text-sm font-medium text-cigar-ash"
+                  style={{ fontFamily: "Lato, sans-serif" }}
+                >
                   Small Blind
                 </label>
                 <input
@@ -140,13 +158,16 @@ export default function Home() {
                   value={smallBlind}
                   onChange={(e) => setSmallBlind(Number(e.target.value))}
                   className="mt-1 block w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-cream-parchment shadow-sm focus:border-whiskey-gold focus:outline-none focus:ring-1 focus:ring-whiskey-gold backdrop-blur-sm"
-                  style={{ fontFamily: 'Roboto Mono, monospace' }}
+                  style={{ fontFamily: "Roboto Mono, monospace" }}
                   min="1"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-cigar-ash" style={{ fontFamily: 'Lato, sans-serif' }}>
+                <label
+                  className="block text-sm font-medium text-cigar-ash"
+                  style={{ fontFamily: "Lato, sans-serif" }}
+                >
                   Big Blind
                 </label>
                 <input
@@ -154,7 +175,7 @@ export default function Home() {
                   value={bigBlind}
                   onChange={(e) => setBigBlind(Number(e.target.value))}
                   className="mt-1 block w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-cream-parchment shadow-sm focus:border-whiskey-gold focus:outline-none focus:ring-1 focus:ring-whiskey-gold backdrop-blur-sm"
-                  style={{ fontFamily: 'Roboto Mono, monospace' }}
+                  style={{ fontFamily: "Roboto Mono, monospace" }}
                   min={smallBlind + 1}
                   required
                 />
@@ -163,7 +184,10 @@ export default function Home() {
 
             <div className="grid grid-cols-2 gap-3 sm:gap-4">
               <div>
-                <label className="block text-sm font-medium text-cigar-ash" style={{ fontFamily: 'Lato, sans-serif' }}>
+                <label
+                  className="block text-sm font-medium text-cigar-ash"
+                  style={{ fontFamily: "Lato, sans-serif" }}
+                >
                   Min Buy-in
                 </label>
                 <input
@@ -171,13 +195,16 @@ export default function Home() {
                   value={minBuyIn}
                   onChange={(e) => setMinBuyIn(Number(e.target.value))}
                   className="mt-1 block w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-cream-parchment shadow-sm focus:border-whiskey-gold focus:outline-none focus:ring-1 focus:ring-whiskey-gold backdrop-blur-sm"
-                  style={{ fontFamily: 'Roboto Mono, monospace' }}
+                  style={{ fontFamily: "Roboto Mono, monospace" }}
                   min={bigBlind * 20}
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-cigar-ash" style={{ fontFamily: 'Lato, sans-serif' }}>
+                <label
+                  className="block text-sm font-medium text-cigar-ash"
+                  style={{ fontFamily: "Lato, sans-serif" }}
+                >
                   Max Buy-in
                 </label>
                 <input
@@ -185,7 +212,7 @@ export default function Home() {
                   value={maxBuyIn}
                   onChange={(e) => setMaxBuyIn(Number(e.target.value))}
                   className="mt-1 block w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-cream-parchment shadow-sm focus:border-whiskey-gold focus:outline-none focus:ring-1 focus:ring-whiskey-gold backdrop-blur-sm"
-                  style={{ fontFamily: 'Roboto Mono, monospace' }}
+                  style={{ fontFamily: "Roboto Mono, monospace" }}
                   min={minBuyIn + 1}
                   required
                 />
@@ -194,9 +221,12 @@ export default function Home() {
 
             <button
               type="submit"
-              disabled={isCreating || !GAME_MODES.find(mode => mode.id === selectedMode)?.enabled}
+              disabled={
+                isCreating ||
+                !GAME_MODES.find((mode) => mode.id === selectedMode)?.enabled
+              }
               className="w-full rounded-md bg-whiskey-gold px-4 py-3 font-bold text-tokyo-night shadow-lg hover:bg-whiskey-gold/90 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-whiskey-gold focus:ring-offset-2 focus:ring-offset-tokyo-night disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-              style={{ fontFamily: 'Lato, sans-serif' }}
+              style={{ fontFamily: "Lato, sans-serif" }}
             >
               {isCreating ? "Creating..." : "Create Room"}
             </button>

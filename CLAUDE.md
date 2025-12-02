@@ -53,6 +53,7 @@ This application follows a **security-first poker architecture** where private i
 ### Database Schema
 
 **Tables:**
+
 - `rooms` - Poker tables/lobbies with game configuration
 - `room_players` - Players seated at tables with chip stacks
 - `game_states` - Current hand state (PUBLIC, no hole cards)
@@ -61,6 +62,7 @@ This application follows a **security-first poker architecture** where private i
 - `hand_results` - Archive of completed hands
 
 **Key JSONB Fields:**
+
 - `game_states.board_state` - `{"board1": ["Ah", "Kh", "7d"], "board2": ["2s", "9c", "Qd"]}`
 - `player_hands.cards` - `["As", "Ks", "Qh", "Jh"]` (4 cards for PLO)
 - `game_states.action_history` - Array of action objects
@@ -86,6 +88,7 @@ The app uses Supabase Realtime with `postgres_changes` subscriptions:
 ### Data Flow
 
 **Dealing a Hand:**
+
 1. Frontend calls `/api/game/deal-hand` (owner only)
 2. Server collects antes from all players
 3. Server generates `deck_seed`, shuffles deterministically
@@ -96,6 +99,7 @@ The app uses Supabase Realtime with `postgres_changes` subscriptions:
 8. Clients receive updates via Realtime subscriptions
 
 **Player Action Flow:**
+
 1. Frontend submits action via `/api/game/submit-action`
 2. Server validates it's player's turn
 3. Server inserts into `player_actions` queue
@@ -105,6 +109,7 @@ The app uses Supabase Realtime with `postgres_changes` subscriptions:
 7. Clients receive updates via `game_states` subscription
 
 **Showdown Resolution:**
+
 1. Auto-triggers after 5 seconds in showdown phase
 2. Frontend calls `/api/game/resolve-hand`
 3. Server fetches all `player_hands` using service role
@@ -160,12 +165,14 @@ src/
 ### Supabase Client Usage
 
 **Browser (Client Components):**
+
 ```typescript
 import { getBrowserClient } from "@/lib/supabase/client";
 const supabase = getBrowserClient();
 ```
 
 **Server (API Routes):**
+
 ```typescript
 import { getServerClient } from "@/lib/supabase/server";
 const supabase = await getServerClient(); // Note: async!
@@ -176,6 +183,7 @@ Server routes use the **publishable key** (not service role) but benefit from co
 ### Real-time Subscription Pattern
 
 All hooks follow this pattern:
+
 1. Initial fetch with `.single()` or `.maybeSingle()`
 2. Subscribe to `postgres_changes` with filter
 3. Handle INSERT/UPDATE/DELETE events
@@ -195,6 +203,7 @@ All hooks follow this pattern:
 1. **Board not showing when joining:** The board only appears after the owner clicks "Deal Hand". Before that, `gameState` is null. The UI checks `gameState && boardA.length > 0` before rendering community cards.
 
 2. **Type casting JSONB fields:** Supabase returns JSONB as `unknown`, so cast explicitly:
+
    ```typescript
    const boardState = gameState.board_state as unknown as BoardState;
    const cards = playerHand.cards as unknown as string[];
@@ -210,7 +219,9 @@ All hooks follow this pattern:
      board1: [...board1, deck[cardIndex++]],
      board2: [...board2, deck[cardIndex++]],
    };
-   await supabase.from("game_states").update({ board_state: updatedBoardState as unknown as any });
+   await supabase
+     .from("game_states")
+     .update({ board_state: updatedBoardState as unknown as any });
    ```
 
 ## TODO / Known Limitations

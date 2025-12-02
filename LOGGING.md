@@ -34,6 +34,7 @@ npm install pino pino-pretty
 ### Log Files
 
 Logs are output to:
+
 - **Development**: Console with pretty formatting (via `pino-pretty`)
 - **Production**: JSON format to stdout (for log aggregation services)
 
@@ -67,6 +68,7 @@ export async function POST(request: Request) {
 ```
 
 Available methods on `log`:
+
 - `start(data?)`: Log request start
 - `info(message, data?)`: Log informational message
 - `debug(message, data?)`: Log debug message
@@ -119,6 +121,7 @@ export function MyComponent() {
 ```
 
 Available methods:
+
 - `debug(message, data?)`: Development-only logs
 - `info(message, data?)`: Informational logs
 - `warn(message, data?)`: Warning logs
@@ -199,12 +202,12 @@ const safe = sanitizePlayerData(playerData);
 
 Logs are organized by severity:
 
-| Level | Usage | Example |
-|-------|-------|---------|
-| `debug` | Development details, function entry/exit | "Shuffling deck with seed" |
-| `info` | General information, state changes | "Player joined room" |
-| `warn` | Unexpected but handled situations | "Player attempted action out of turn" |
-| `error` | Errors requiring attention | "Failed to fetch game state" |
+| Level   | Usage                                    | Example                               |
+| ------- | ---------------------------------------- | ------------------------------------- |
+| `debug` | Development details, function entry/exit | "Shuffling deck with seed"            |
+| `info`  | General information, state changes       | "Player joined room"                  |
+| `warn`  | Unexpected but handled situations        | "Player attempted action out of turn" |
+| `error` | Errors requiring attention               | "Failed to fetch game state"          |
 
 ## Structured Logging
 
@@ -219,6 +222,7 @@ logger.info("Room " + roomId + " initialized with " + playerCount + " players");
 ```
 
 Benefits:
+
 - Easy to filter logs by field (e.g., all logs for `roomId=123`)
 - Machine-readable for log aggregation services
 - Consistent format across the application
@@ -277,6 +281,7 @@ In production, consider integrating with a log aggregation service:
 ### Filtering Logs
 
 Filter by module:
+
 ```bash
 # Server logs
 LOG_LEVEL=debug npm run dev | grep poker-deck
@@ -298,6 +303,7 @@ LOG_LEVEL=error npm run dev
 5. **Use structured data**: Always use the data parameter for machine-readable logs.
 
 6. **Log errors with context**: When logging errors, include contextual information:
+
    ```typescript
    log.error(error, { roomId, action: "dealing cards", playerCount: 4 });
    ```
@@ -321,6 +327,7 @@ LOG_LEVEL=error npm run dev
 ### Performance concerns
 
 Pino is designed to be fast, but:
+
 - Avoid logging in tight loops
 - Use `debug` level for verbose logs (they can be disabled in production)
 - Consider async logging for high-throughput scenarios

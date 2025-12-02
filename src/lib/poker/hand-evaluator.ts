@@ -24,6 +24,36 @@ const STRENGTH_DESCRIPTIONS: Record<number, string> = {
 };
 
 /**
+ * Evaluates PLO hand with partial board (flop or turn)
+ * Pads incomplete boards with placeholder cards for evaluation
+ *
+ * @param holeCards - Player's 4 hole cards
+ * @param boardCards - 3, 4, or 5 community cards
+ * @returns Hand evaluation based on available cards
+ */
+export function evaluatePLOHandPartial(
+  holeCards: string[],
+  boardCards: string[],
+): HandEvaluation {
+  if (boardCards.length < 3 || boardCards.length > 5) {
+    evalLogger.error(
+      { boardCardsCount: boardCards.length },
+      "Invalid board - must have 3-5 cards",
+    );
+    return { rank: -1, description: "Invalid board" };
+  }
+
+  // Pad to 5 cards if needed with placeholder cards that don't exist in deck
+  const paddedBoard = [...boardCards];
+  const placeholders = ["Xs", "Xh", "Xd", "Xc", "Xx"];
+  while (paddedBoard.length < 5) {
+    paddedBoard.push(placeholders[paddedBoard.length]);
+  }
+
+  return evaluatePLOHand(holeCards, paddedBoard);
+}
+
+/**
  * Evaluates PLO hand using exactly 2 hole cards + 3 board cards
  * Returns best possible 5-card hand
  *
@@ -34,12 +64,18 @@ export function evaluatePLOHand(
   boardCards: string[], // 5 cards
 ): HandEvaluation {
   if (holeCards.length !== 4) {
-    evalLogger.error({ holeCardsCount: holeCards.length }, "Invalid PLO hand - must have 4 hole cards");
+    evalLogger.error(
+      { holeCardsCount: holeCards.length },
+      "Invalid PLO hand - must have 4 hole cards",
+    );
     return { rank: Infinity, description: "Invalid hand" };
   }
 
   if (boardCards.length !== 5) {
-    evalLogger.error({ boardCardsCount: boardCards.length }, "Invalid board - must have 5 cards");
+    evalLogger.error(
+      { boardCardsCount: boardCards.length },
+      "Invalid board - must have 5 cards",
+    );
     return { rank: Infinity, description: "Invalid board" };
   }
 
@@ -63,16 +99,24 @@ export function evaluatePLOHand(
 
             try {
               // Type assertion needed because hand-evaluator expects specific card type union
-              const result = evaluate({ holeCards: hand as unknown as Parameters<typeof evaluate>[0]['holeCards'] });
+              const result = evaluate({
+                holeCards: hand as unknown as Parameters<
+                  typeof evaluate
+                >[0]["holeCards"],
+              });
               // Higher strength number = better hand
               if (result.strength > bestRank) {
                 bestRank = result.strength;
-                bestDescription = STRENGTH_DESCRIPTIONS[result.strength] || "Unknown";
+                bestDescription =
+                  STRENGTH_DESCRIPTIONS[result.strength] || "Unknown";
               }
             } catch (error) {
               evalLogger.error(
-                { hand, error: error instanceof Error ? error.message : String(error) },
-                "Hand evaluation failed"
+                {
+                  hand,
+                  error: error instanceof Error ? error.message : String(error),
+                },
+                "Hand evaluation failed",
               );
             }
           }
@@ -81,12 +125,15 @@ export function evaluatePLOHand(
     }
   }
 
-  evalLogger.debug({
-    holeCards,
-    boardCards,
-    bestRank,
-    bestDescription,
-  }, "PLO hand evaluated");
+  evalLogger.debug(
+    {
+      holeCards,
+      boardCards,
+      bestRank,
+      bestDescription,
+    },
+    "PLO hand evaluated",
+  );
 
   return { rank: bestRank, description: bestDescription };
 }
@@ -122,13 +169,16 @@ export function findBoardWinners(
   // Return all players with the best rank (handles ties)
   const winners = evaluations.filter((e) => e.rank === bestRank);
 
-  evalLogger.info({
-    boardCards,
-    totalPlayers: activePlayers.length,
-    winnerCount: winners.length,
-    bestRank,
-    isTie: winners.length > 1,
-  }, "Board winners determined");
+  evalLogger.info(
+    {
+      boardCards,
+      totalPlayers: activePlayers.length,
+      winnerCount: winners.length,
+      bestRank,
+      isTie: winners.length > 1,
+    },
+    "Board winners determined",
+  );
 
   return winners;
 }

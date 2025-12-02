@@ -138,10 +138,15 @@ export function doesAllInReopenBetting(
 export function isBettingRoundComplete(
   seatsToAct: number[],
   currentBet: number,
-  players: Array<{ seat_number: number; current_bet: number; has_folded: boolean; is_all_in: boolean }>,
+  players: Array<{
+    seat_number: number;
+    current_bet: number;
+    has_folded: boolean;
+    is_all_in: boolean;
+  }>,
 ): boolean {
   // Get active players (not folded, not all-in)
-  const activePlayers = players.filter(p => !p.has_folded && !p.is_all_in);
+  const activePlayers = players.filter((p) => !p.has_folded && !p.is_all_in);
 
   // If no active players or only one active player, round is complete
   if (activePlayers.length <= 1) {
@@ -149,7 +154,7 @@ export function isBettingRoundComplete(
   }
 
   // All active players must have matched the current bet
-  const allBetsEqual = activePlayers.every(p => p.current_bet === currentBet);
+  const allBetsEqual = activePlayers.every((p) => p.current_bet === currentBet);
   if (!allBetsEqual) {
     return false;
   }
@@ -174,15 +179,15 @@ export function shouldAutoDealToShowdown(
     has_folded: boolean | null;
     is_all_in: boolean | null;
     seat_number: number;
-  }>
+  }>,
 ): boolean {
-  const remainingPlayers = players.filter(p => !p.has_folded);
+  const remainingPlayers = players.filter((p) => !p.has_folded);
 
   if (remainingPlayers.length <= 1) {
     return false; // Edge case or handled by fold detection
   }
 
-  const activeNonAllIn = remainingPlayers.filter(p => !p.is_all_in);
+  const activeNonAllIn = remainingPlayers.filter((p) => !p.is_all_in);
 
   // If 0 or 1 players can still bet, no action is possible
   return activeNonAllIn.length <= 1;

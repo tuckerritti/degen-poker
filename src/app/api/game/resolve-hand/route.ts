@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { getServerClient } from "@/lib/supabase/server";
-import { splitPot, splitPotWithSidePots, createSidePots, type PlayerInHand } from "@/lib/poker/pot-splitter";
+import {
+  splitPot,
+  splitPotWithSidePots,
+  createSidePots,
+  type PlayerInHand,
+} from "@/lib/poker/pot-splitter";
 import { resolveHandSchema } from "@/lib/validation/schemas";
 import { type BoardState } from "@/types/database";
 import { z } from "zod";
@@ -28,10 +33,7 @@ export async function POST(request: Request) {
 
     if (gameError || !gameState) {
       log.error(gameError || new Error("No active game"), { roomId });
-      return NextResponse.json(
-        { error: "No active game" },
-        { status: 404 },
-      );
+      return NextResponse.json({ error: "No active game" }, { status: 404 });
     }
 
     if (gameState.phase !== "showdown") {
@@ -95,7 +97,10 @@ export async function POST(request: Request) {
     // Map player hands by seat number for easy lookup
     const playerHandsBySeat = new Map<number, string[]>();
     for (const hand of playerHandsData) {
-      playerHandsBySeat.set(hand.seat_number, hand.cards as unknown as string[]);
+      playerHandsBySeat.set(
+        hand.seat_number,
+        hand.cards as unknown as string[],
+      );
     }
 
     // Build player hands for evaluation
@@ -164,11 +169,11 @@ export async function POST(request: Request) {
 
     // Create side pots based on all-in scenarios
     const sidePots = createSidePots(
-      playersInHand.map(p => ({
+      playersInHand.map((p) => ({
         seatNumber: p.seatNumber,
         totalInvested: p.totalInvested,
         hasFolded: p.hasFolded,
-      }))
+      })),
     );
 
     log.info("Side pots created", {
@@ -178,9 +183,10 @@ export async function POST(request: Request) {
     });
 
     // Evaluate hands and split pot(s)
-    const winners = sidePots.length > 0
-      ? splitPotWithSidePots(playersInHand, boardA, boardB, sidePots)
-      : splitPot(playersInHand, boardA, boardB, potSize);
+    const winners =
+      sidePots.length > 0
+        ? splitPotWithSidePots(playersInHand, boardA, boardB, sidePots)
+        : splitPot(playersInHand, boardA, boardB, potSize);
 
     log.info("Hand evaluation complete", {
       roomId,

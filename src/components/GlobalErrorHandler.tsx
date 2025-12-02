@@ -15,19 +15,24 @@ export function GlobalErrorHandler() {
         filename: event.filename,
         lineno: event.lineno,
         colno: event.colno,
-        error: event.error ? {
-          message: event.error.message,
-          stack: event.error.stack,
-        } : undefined,
+        error: event.error
+          ? {
+              message: event.error.message,
+              stack: event.error.stack,
+            }
+          : undefined,
       });
     };
 
     const handleRejection = (event: PromiseRejectionEvent) => {
       clientLogger.error("GlobalErrorHandler: Unhandled promise rejection", {
-        reason: event.reason instanceof Error ? {
-          message: event.reason.message,
-          stack: event.reason.stack,
-        } : String(event.reason),
+        reason:
+          event.reason instanceof Error
+            ? {
+                message: event.reason.message,
+                stack: event.reason.stack,
+              }
+            : String(event.reason),
       });
     };
 

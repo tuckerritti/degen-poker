@@ -1,9 +1,5 @@
 // Re-export auto-generated types from database.types.ts
-import type {
-  Database,
-  Tables,
-  Enums,
-} from "./database.types";
+import type { Database, Tables, Enums } from "./database.types";
 
 export type { Database, Tables, Enums };
 
@@ -23,8 +19,8 @@ export type HandResult = Tables<"hand_results">;
 
 // Board state structure for double board PLO
 export interface BoardState {
-  board1?: string[];  // e.g., ["Ah", "Kh", "7d", "4c", "2s"]
-  board2?: string[];  // e.g., ["2s", "9c", "Qd", "Jh", "3d"]
+  board1?: string[]; // e.g., ["Ah", "Kh", "7d", "4c", "2s"]
+  board2?: string[]; // e.g., ["2s", "9c", "Qd", "Jh", "3d"]
 }
 
 export interface SidePot {

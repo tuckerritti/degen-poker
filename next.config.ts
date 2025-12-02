@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   /* config options here */
   reactCompiler: true,
   // External packages for server components
-  serverExternalPackages: ['pino', 'pino-pretty'],
+  serverExternalPackages: ["pino", "pino-pretty"],
 };
 
 export default nextConfig;

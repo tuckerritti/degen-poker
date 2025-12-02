@@ -53,14 +53,17 @@ export function ActionPanel({
 
     // Calculate fractional bet between min and pot-sized
     const range = potSizedBet - minBet;
-    const quickBet = Math.floor(minBet + (range * multiplier));
+    const quickBet = Math.floor(minBet + range * multiplier);
 
     const capped = Math.min(Math.max(quickBet, limits.minBet), limits.maxBet);
     setBetAmount(capped);
   };
 
   return (
-    <div className="glass border-t border-whiskey-gold/20 p-3 sm:p-4" style={{ fontFamily: 'Lato, sans-serif' }}>
+    <div
+      className="glass border-t border-whiskey-gold/20 p-3 sm:p-4"
+      style={{ fontFamily: "Lato, sans-serif" }}
+    >
       <div className="mx-auto max-w-full sm:max-w-4xl">
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
@@ -94,7 +97,7 @@ export function ActionPanel({
                 onClick={() => handleAction("call")}
                 disabled={disabled || isSubmitting}
                 className="flex-1 sm:flex-none rounded-lg bg-whiskey-gold border border-whiskey-gold px-8 sm:px-12 py-3 font-bold text-tokyo-night shadow-lg transition-all hover:bg-whiskey-gold/90 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 touch-target"
-                style={{ fontFamily: 'Roboto Mono, monospace' }}
+                style={{ fontFamily: "Roboto Mono, monospace" }}
               >
                 Call ${limits.callAmount}
               </button>
@@ -141,7 +144,9 @@ export function ActionPanel({
                   </button>
                   <button
                     onClick={() => setBetAmount(playerChips)}
-                    disabled={disabled || isSubmitting || playerChips > limits.maxBet}
+                    disabled={
+                      disabled || isSubmitting || playerChips > limits.maxBet
+                    }
                     className="flex-1 rounded bg-mahogany border border-white/10 px-2 py-2 text-xs sm:text-xs text-cream-parchment hover:border-whiskey-gold/50 disabled:opacity-50 transition-colors"
                   >
                     All-In
@@ -152,10 +157,7 @@ export function ActionPanel({
               {/* Bet/Raise Button */}
               <button
                 onClick={() =>
-                  handleAction(
-                    currentBet === 0 ? "bet" : "raise",
-                    betAmount,
-                  )
+                  handleAction(currentBet === 0 ? "bet" : "raise", betAmount)
                 }
                 disabled={
                   disabled ||
@@ -168,7 +170,12 @@ export function ActionPanel({
                 <div className="text-xs">
                   {currentBet === 0 ? "Bet" : "Raise"}
                 </div>
-                <div className="text-lg" style={{ fontFamily: 'Roboto Mono, monospace' }}>${betAmount}</div>
+                <div
+                  className="text-lg"
+                  style={{ fontFamily: "Roboto Mono, monospace" }}
+                >
+                  ${betAmount}
+                </div>
               </button>
             </div>
           )}
@@ -179,7 +186,7 @@ export function ActionPanel({
               onClick={() => handleAction("all_in")}
               disabled={disabled || isSubmitting}
               className="w-full sm:w-auto rounded-lg bg-whiskey-gold border border-whiskey-gold px-8 sm:px-12 py-3 font-bold text-tokyo-night shadow-lg transition-all hover:bg-whiskey-gold/90 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 touch-target"
-              style={{ fontFamily: 'Roboto Mono, monospace' }}
+              style={{ fontFamily: "Roboto Mono, monospace" }}
             >
               All-In ${playerChips}
             </button>
