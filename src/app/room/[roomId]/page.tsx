@@ -780,6 +780,12 @@ export default function RoomPage({
                       className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-cigar-ash"
                       style={{ fontFamily: "Lato, sans-serif" }}
                     >
+                      Stack (Pre-Hand)
+                    </th>
+                    <th
+                      className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-cigar-ash"
+                      style={{ fontFamily: "Lato, sans-serif" }}
+                    >
                       Stack
                     </th>
                     <th
@@ -795,6 +801,14 @@ export default function RoomPage({
                     .filter((p) => !p.is_spectating)
                     .sort((a, b) => a.seat_number - b.seat_number)
                     .map((player) => {
+                      const investedThisHand =
+                        gameState && player.total_invested_this_hand
+                          ? player.total_invested_this_hand
+                          : 0;
+                      const preHandStack = player.chip_stack + investedThisHand;
+                      const isInCurrentPot = Boolean(
+                        gameState && investedThisHand > 0,
+                      );
                       const profitLoss =
                         player.chip_stack - player.total_buy_in;
                       const isProfit = profitLoss > 0;
@@ -833,6 +847,17 @@ export default function RoomPage({
                             className="whitespace-nowrap px-4 py-3 text-right text-sm text-cream-parchment"
                             style={{ fontFamily: "Roboto Mono, monospace" }}
                           >
+                            ${preHandStack}
+                            {isInCurrentPot && (
+                              <span className="ml-2 rounded-full bg-whiskey-gold/20 px-2 py-0.5 text-[11px] font-semibold text-whiskey-gold align-middle">
+                                In pot: ${investedThisHand}
+                              </span>
+                            )}
+                          </td>
+                          <td
+                            className="whitespace-nowrap px-4 py-3 text-right text-sm text-cream-parchment"
+                            style={{ fontFamily: "Roboto Mono, monospace" }}
+                          >
                             ${player.chip_stack}
                           </td>
                           <td
@@ -859,6 +884,23 @@ export default function RoomPage({
                       style={{ fontFamily: "Lato, sans-serif" }}
                     >
                       Total
+                    </td>
+                    <td
+                      className="whitespace-nowrap px-4 py-3 text-right text-sm font-bold text-cream-parchment"
+                      style={{ fontFamily: "Roboto Mono, monospace" }}
+                    >
+                      $
+                      {players
+                        .filter((p) => !p.is_spectating)
+                        .reduce(
+                          (sum, p) =>
+                            sum +
+                            p.chip_stack +
+                            (gameState && p.total_invested_this_hand
+                              ? p.total_invested_this_hand
+                              : 0),
+                          0,
+                        )}
                     </td>
                     <td
                       className="whitespace-nowrap px-4 py-3 text-right text-sm font-bold text-cream-parchment"
