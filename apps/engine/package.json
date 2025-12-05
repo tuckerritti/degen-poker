@@ -1,0 +1,14 @@
+{
+  "name": "engine",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "echo \"engine service TBD\"",
+    "build": "echo \"engine build placeholder\"",
+    "lint": "echo \"engine lint placeholder\""
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}
