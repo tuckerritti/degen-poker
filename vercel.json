@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "framework": "nextjs",
+  "installCommand": "npm install",
+  "buildCommand": "npm run build -- --filter=web",
+  "outputDirectory": "apps/web/.next",
+  "env": {
+  }
+}
