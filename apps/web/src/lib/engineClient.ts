@@ -12,9 +12,17 @@ export function getEngineUrl() {
 export async function engineFetch(
   path: string,
   init?: RequestInit,
+  authToken?: string,
 ): Promise<Response> {
   const url = `${getEngineUrl()}${path.startsWith("/") ? path : `/${path}`}`;
-  return fetch(url, init);
+  const headers = new Headers(init?.headers ?? {});
+  if (authToken) {
+    headers.set("Authorization", `Bearer ${authToken}`);
+  }
+  return fetch(url, {
+    ...init,
+    headers,
+  });
 }
 
 export function safeEngineUrl() {

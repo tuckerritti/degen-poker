@@ -47,7 +47,7 @@ const GAME_MODES: GameModeConfig[] = [
 
 export default function Home() {
   const router = useRouter();
-  const { sessionId } = useSession();
+  const { sessionId, accessToken } = useSession();
   const [selectedMode, setSelectedMode] =
     useState<GameMode>("double-board-plo");
   const [isCreating, setIsCreating] = useState(false);
@@ -76,7 +76,10 @@ export default function Home() {
         `${process.env.NEXT_PUBLIC_ENGINE_URL.replace(/\/+$/, "")}/rooms`,
         {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
         body: JSON.stringify({
           smallBlind,
           bigBlind,

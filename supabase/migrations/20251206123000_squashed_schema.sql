@@ -1,7 +1,7 @@
--- Engine + Supabase schema recreation per Implementation Plan
--- Generated on 2025-12-05
+-- Squashed schema for Degen Poker (engine + security + realtime)
+-- Generated on 2025-12-06
 
--- Enable required extensions
+-- Extensions
 create extension if not exists "pgcrypto";
 
 -- Enums
@@ -18,7 +18,7 @@ begin
 end;
 $$ language plpgsql;
 
--- Rooms table
+-- Rooms
 create table public.rooms (
   id uuid primary key default gen_random_uuid(),
   created_at timestamptz not null default now(),
@@ -121,10 +121,14 @@ create table public.player_actions (
   processed_at timestamptz null,
   error_message text null,
   auth_user_id uuid null,
+  idempotency_key text null,
   created_at timestamptz not null default now()
 );
 create index player_actions_room_id_idx on public.player_actions(room_id);
 create index player_actions_gs_idx on public.player_actions(game_state_id);
+create unique index player_actions_idem_idx
+  on public.player_actions (room_id, seat_number, idempotency_key)
+  where idempotency_key is not null;
 
 -- Hand results
 create table public.hand_results (
@@ -142,9 +146,39 @@ create table public.hand_results (
 );
 create index hand_results_room_id_idx on public.hand_results(room_id);
 
--- Grants
+-- Game state secrets
+create table public.game_state_secrets (
+  id uuid primary key default gen_random_uuid(),
+  game_state_id uuid not null references public.game_states on delete cascade,
+  deck_seed text not null,
+  full_board1 text[] not null,
+  full_board2 text[] not null,
+  created_at timestamptz not null default now(),
+  unique(game_state_id)
+);
+
+-- Realtime replication
+alter table public.rooms replica identity full;
+alter table public.room_players replica identity full;
+alter table public.game_states replica identity full;
+alter table public.player_hands replica identity full;
+alter table public.player_actions replica identity full;
+alter table public.hand_results replica identity full;
+alter table public.game_state_secrets replica identity full;
+
+alter publication supabase_realtime add table public.rooms;
+alter publication supabase_realtime add table public.room_players;
+alter publication supabase_realtime add table public.game_states;
+alter publication supabase_realtime add table public.player_hands;
+alter publication supabase_realtime add table public.player_actions;
+alter publication supabase_realtime add table public.hand_results;
+alter publication supabase_realtime add table public.game_state_secrets;
+
+-- Grants (read for anon/authenticated, write only for service_role)
 grant usage on schema public to anon, authenticated, service_role;
-grant select, insert, update, delete on all tables in schema public to anon, authenticated, service_role;
+grant select on all tables in schema public to anon, authenticated, service_role;
+grant insert, update, delete on all tables in schema public to service_role;
+revoke insert, update, delete on all tables in schema public from anon, authenticated;
 
 -- RLS
 alter table public.rooms enable row level security;
@@ -153,9 +187,9 @@ alter table public.game_states enable row level security;
 alter table public.player_hands enable row level security;
 alter table public.player_actions enable row level security;
 alter table public.hand_results enable row level security;
+alter table public.game_state_secrets enable row level security;
 
--- Policies: allow read to everyone, writes to service role, hole cards scoped
-
+-- Policies
 create policy "rooms_read" on public.rooms for select using (true);
 create policy "rooms_write_service" on public.rooms for all using (auth.role() = 'service_role');
 
@@ -174,5 +208,12 @@ create policy "player_actions_service_read" on public.player_actions for select 
 create policy "hand_results_read" on public.hand_results for select using (true);
 create policy "hand_results_write_service" on public.hand_results for all using (auth.role() = 'service_role');
 
+create policy "gss_service_all" on public.game_state_secrets
+  for all
+  using (auth.role() = 'service_role')
+  with check (auth.role() = 'service_role');
+
 -- Default privileges for future tables
-alter default privileges in schema public grant select, insert, update, delete on tables to anon, authenticated, service_role;
+alter default privileges in schema public grant select on tables to anon, authenticated, service_role;
+alter default privileges in schema public grant insert, update, delete on tables to service_role;
+alter default privileges in schema public revoke insert, update, delete on tables from anon, authenticated;

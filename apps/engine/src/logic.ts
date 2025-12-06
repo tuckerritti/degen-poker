@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { randomBytes } from "crypto";
 import { ActionType, GamePhase } from "@poker/shared";
 import { Card, shuffleDeck } from "./deck.js";
 import type { GameStateRow, Room, RoomPlayer } from "./types.js";
@@ -41,8 +41,9 @@ function dealBoards(deck: Card[]): { board1: Card[]; board2: Card[]; remaining: 
   return { board1, board2, remaining };
 }
 
-export function dealHand(room: Room, players: RoomPlayer[], providedSeed?: string): DealResult {
-  const deckSeed = providedSeed ?? randomUUID();
+export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
+  // Generate a cryptographically strong, non-guessable seed and never expose it to clients
+  const deckSeed = randomBytes(32).toString("hex");
   const deck = shuffleDeck(deckSeed);
 
   const activePlayers = players.filter(
@@ -511,47 +512,55 @@ export function determineDoubleBoardWinners(
 /**
  * Calculate side pots from players with different all-in amounts
  */
-export function calculateSidePots(
-  players: RoomPlayer[],
-): Array<{ amount: number; eligibleSeats: number[] }> {
-  const activePlayers = players.filter((p) => !p.has_folded && p.total_invested_this_hand > 0);
-
-  if (activePlayers.length === 0) {
-    return [];
-  }
-
-  // Sort by total investment
-  const sorted = [...activePlayers].sort(
-    (a, b) => a.total_invested_this_hand - b.total_invested_this_hand,
+export function calculateSidePots(players: RoomPlayer[]): Array<{ amount: number; eligibleSeats: number[] }> {
+  const contributors = players.filter(
+    (p) =>
+      !p.has_folded &&
+      !p.is_spectating &&
+      !p.is_sitting_out &&
+      (p.total_invested_this_hand ?? 0) > 0,
   );
+
+  if (contributors.length === 0) return [];
+
+  const sorted = [...contributors].sort(
+    (a, b) => (a.total_invested_this_hand ?? 0) - (b.total_invested_this_hand ?? 0),
+  );
+
+  const uniqueLevels = Array.from(
+    new Set(sorted.map((p) => p.total_invested_this_hand ?? 0)),
+  ).sort((a, b) => a - b);
 
   const pots: Array<{ amount: number; eligibleSeats: number[] }> = [];
   let previousLevel = 0;
 
-  sorted.forEach((player, index) => {
-    const currentLevel = player.total_invested_this_hand;
-    const diff = currentLevel - previousLevel;
-
-    if (diff > 0) {
-      // All players still in the hand at this level contribute to this pot
-      const eligibleSeats = sorted.slice(index).map((p) => p.seat_number);
-      const potAmount = diff * eligibleSeats.length;
-
-      // Also add contributions from players who invested more (they're in subsequent sorted entries)
-      for (let i = 0; i < index; i++) {
-        // These players already contributed up to currentLevel
-      }
-
+  uniqueLevels.forEach((level) => {
+    const eligibleSeats = sorted
+      .filter((p) => (p.total_invested_this_hand ?? 0) >= level)
+      .map((p) => p.seat_number);
+    const diff = level - previousLevel;
+    if (diff > 0 && eligibleSeats.length > 0) {
       pots.push({
-        amount: potAmount,
+        amount: diff * eligibleSeats.length,
         eligibleSeats,
       });
     }
-
-    previousLevel = currentLevel;
+    previousLevel = level;
   });
 
   return pots;
+}
+
+function distributeEven(amount: number, seats: number[], payouts: Map<number, number>) {
+  if (amount <= 0 || seats.length === 0) return;
+  const sortedSeats = [...seats].sort((a, b) => a - b);
+  const base = Math.floor(amount / sortedSeats.length);
+  let remainder = amount - base * sortedSeats.length;
+  sortedSeats.forEach((seat) => {
+    const extra = remainder > 0 ? 1 : 0;
+    if (remainder > 0) remainder -= 1;
+    payouts.set(seat, (payouts.get(seat) ?? 0) + base + extra);
+  });
 }
 
 /**
@@ -559,32 +568,45 @@ export function calculateSidePots(
  * TODO: sidePots parameter will be used when side pot distribution is implemented
  */
 export function endOfHandPayout(
+  sidePots: Array<{ amount: number; eligibleSeats: number[] }>,
   board1Winners: number[],
   board2Winners: number[],
-  pot: number,
 ): { seat: number; amount: number }[] {
   if (board1Winners.length === 0 && board2Winners.length === 0) return [];
 
   const payouts: Map<number, number> = new Map();
+  const potsToDistribute =
+    sidePots.length > 0
+      ? sidePots
+      : [
+          {
+            amount: 0,
+            eligibleSeats: Array.from(new Set([...board1Winners, ...board2Winners])),
+          },
+        ];
 
-  // For now, ignore side pots and split the main pot between the two boards
-  // TODO: Implement proper side pot distribution
+  potsToDistribute.forEach((pot) => {
+    const eligibleBoard1 = board1Winners.filter((seat) => pot.eligibleSeats.includes(seat));
+    const eligibleBoard2 = board2Winners.filter((seat) => pot.eligibleSeats.includes(seat));
 
-  // Split pot in half for each board
-  // Use Math.floor for first board, but give remainder to second board to avoid losing chips
-  const halfPot = Math.floor(pot / 2);
-  const remainderPot = pot - halfPot; // This handles odd pots correctly
+    const board1Seats =
+      eligibleBoard1.length > 0
+        ? eligibleBoard1
+        : eligibleBoard2.length > 0
+          ? eligibleBoard2
+          : pot.eligibleSeats;
+    const board2Seats =
+      eligibleBoard2.length > 0
+        ? eligibleBoard2
+        : board1Seats.length > 0
+          ? board1Seats
+          : pot.eligibleSeats;
 
-  // Award board 1 half
-  const board1Share = Math.floor(halfPot / board1Winners.length);
-  board1Winners.forEach((seat) => {
-    payouts.set(seat, (payouts.get(seat) || 0) + board1Share);
-  });
+    const halfPot = Math.floor(pot.amount / 2);
+    const remainderPot = pot.amount - halfPot;
 
-  // Award board 2 half (includes any odd chip)
-  const board2Share = Math.floor(remainderPot / board2Winners.length);
-  board2Winners.forEach((seat) => {
-    payouts.set(seat, (payouts.get(seat) || 0) + board2Share);
+    distributeEven(halfPot, board1Seats, payouts);
+    distributeEven(remainderPot, board2Seats, payouts);
   });
 
   return Array.from(payouts.entries()).map(([seat, amount]) => ({ seat, amount }));

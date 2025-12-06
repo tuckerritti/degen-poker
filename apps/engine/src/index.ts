@@ -4,7 +4,7 @@ import { z } from "zod";
 import { port, corsOrigin } from "./env.js";
 import { logger } from "./logger.js";
 import { supabase } from "./supabase.js";
-import { dealHand, applyAction, endOfHandPayout, determineDoubleBoardWinners } from "./logic.js";
+import { dealHand, applyAction, endOfHandPayout, determineDoubleBoardWinners, calculateSidePots } from "./logic.js";
 import type { GameStateRow, Room, RoomPlayer } from "./types.js";
 import { ActionType } from "@poker/shared";
 import { fetchGameStateSecret } from "./secrets.js";
@@ -19,6 +19,27 @@ app.use(
 );
 app.use(express.json());
 
+async function getUserId(req: Request): Promise<string | null> {
+  const authHeader = (req.headers.authorization ?? req.headers.Authorization ?? "") as string;
+  if (!authHeader || !authHeader.toLowerCase().startsWith("bearer ")) {
+    return null;
+  }
+  const token = authHeader.slice(7).trim();
+  if (!token) return null;
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error || !data?.user) return null;
+  return data.user.id;
+}
+
+async function requireUser(req: Request, res: Response): Promise<string | null> {
+  const userId = await getUserId(req);
+  if (!userId) {
+    res.status(401).json({ error: "Unauthorized: missing or invalid bearer token" });
+    return null;
+  }
+  return userId;
+}
+
 const createRoomSchema = z.object({
   smallBlind: z.number().int().positive(),
   bigBlind: z.number().int().positive(),
@@ -28,7 +49,6 @@ const createRoomSchema = z.object({
   bombPotAnte: z.number().int().min(0).optional(),
   interHandDelay: z.number().int().min(0).optional(),
   pauseAfterHand: z.boolean().optional(),
-  ownerAuthUserId: z.string().uuid().nullable().optional(),
 });
 
 const joinRoomSchema = z.object({
@@ -36,12 +56,9 @@ const joinRoomSchema = z.object({
   seatNumber: z.number().int().min(0),
   displayName: z.string().min(1),
   buyIn: z.number().int().positive(),
-  authUserId: z.string().uuid().nullable().optional(),
 });
 
-const startHandSchema = z.object({
-  deckSeed: z.string().optional(),
-});
+const startHandSchema = z.object({});
 
 const ACTIONS = [
   "fold",
@@ -56,7 +73,6 @@ const actionSchema = z.object({
   seatNumber: z.number().int(),
   actionType: z.enum(ACTIONS),
   amount: z.number().int().positive().optional(),
-  authUserId: z.string().uuid().nullable().optional(),
   idempotencyKey: z.string().optional(),
 });
 
@@ -66,6 +82,9 @@ app.get("/health", (_req: Request, res: Response) => {
 
 app.post("/rooms", async (req: Request, res: Response) => {
   try {
+    const userId = await requireUser(req, res);
+    if (!userId) return;
+
     const payload = createRoomSchema.parse(req.body);
     if (payload.bigBlind <= payload.smallBlind) {
       return res.status(400).json({ error: "bigBlind must be greater than smallBlind" });
@@ -85,7 +104,7 @@ app.post("/rooms", async (req: Request, res: Response) => {
         bomb_pot_ante: payload.bombPotAnte ?? 0,
         inter_hand_delay: payload.interHandDelay ?? 5,
         pause_after_hand: payload.pauseAfterHand ?? false,
-        owner_auth_user_id: payload.ownerAuthUserId ?? null,
+        owner_auth_user_id: userId,
         last_activity_at: new Date().toISOString(),
       })
       .select()
@@ -102,6 +121,9 @@ app.post("/rooms", async (req: Request, res: Response) => {
 
 app.post("/rooms/:roomId/join", async (req: Request, res: Response) => {
   try {
+    const userId = await requireUser(req, res);
+    if (!userId) return;
+
     const roomId = req.params.roomId;
     const payload = joinRoomSchema.parse(req.body);
 
@@ -114,6 +136,28 @@ app.post("/rooms/:roomId/join", async (req: Request, res: Response) => {
 
     if (payload.buyIn < room.min_buy_in || payload.buyIn > room.max_buy_in) {
       return res.status(400).json({ error: "Buy-in out of range" });
+    }
+
+    if (payload.seatNumber >= room.max_players) {
+      return res.status(400).json({ error: "Seat number exceeds table capacity" });
+    }
+
+    const { data: seatedByUser } = await supabase
+      .from("room_players")
+      .select("*")
+      .eq("room_id", roomId)
+      .eq("auth_user_id", userId)
+      .maybeSingle();
+    if (seatedByUser) {
+      return res.status(400).json({ error: "You are already seated at this table" });
+    }
+
+    const { count: currentPlayers } = await supabase
+      .from("room_players")
+      .select("id", { count: "exact", head: true })
+      .eq("room_id", roomId);
+    if ((currentPlayers ?? 0) >= room.max_players) {
+      return res.status(400).json({ error: "Table is full" });
     }
 
     const { data: existing } = await supabase
@@ -134,7 +178,7 @@ app.post("/rooms/:roomId/join", async (req: Request, res: Response) => {
         display_name: payload.displayName,
         chip_stack: payload.buyIn,
         total_buy_in: payload.buyIn,
-        auth_user_id: payload.authUserId ?? null,
+        auth_user_id: userId,
         connected_at: new Date().toISOString(),
       })
       .select()
@@ -156,7 +200,10 @@ app.post("/rooms/:roomId/join", async (req: Request, res: Response) => {
 
 app.post("/rooms/:roomId/start-hand", async (req: Request, res: Response) => {
   const roomId = req.params.roomId;
-  const { deckSeed } = startHandSchema.parse(req.body ?? {});
+  startHandSchema.parse(req.body ?? {});
+
+  const userId = await requireUser(req, res);
+  if (!userId) return;
 
   const room = await fetchRoom(roomId);
   if (!room) return res.status(404).json({ error: "Room not found" });
@@ -164,15 +211,33 @@ app.post("/rooms/:roomId/start-hand", async (req: Request, res: Response) => {
     return res.status(400).json({ error: "Room not active" });
   }
 
+  if (room.owner_auth_user_id && room.owner_auth_user_id !== userId) {
+    return res.status(403).json({ error: "Only the room owner can deal the next hand" });
+  }
+
+  if (!room.owner_auth_user_id) {
+    const { error: ownerErr } = await supabase
+      .from("rooms")
+      .update({ owner_auth_user_id: userId })
+      .eq("id", roomId);
+    if (ownerErr) {
+      return res.status(500).json({ error: "Failed to assign room owner" });
+    }
+  }
+
+  const activeGame = await fetchLatestGameState(roomId);
+  if (activeGame) {
+    return res.status(400).json({ error: "A hand is already in progress" });
+  }
+
   const players = await fetchPlayers(roomId);
   if (players.length < 2) {
     return res.status(400).json({ error: "Need at least two players to start" });
   }
 
-  const { gameState, playerHands, updatedPlayers, deckSeed: usedSeed, fullBoard1, fullBoard2 } = dealHand(
+  const { gameState, playerHands, updatedPlayers, fullBoard1, fullBoard2, deckSeed } = dealHand(
     room as Room,
     players as RoomPlayer[],
-    deckSeed,
   );
 
   let createdGameStateId: string | null = null;
@@ -187,7 +252,7 @@ app.post("/rooms/:roomId/start-hand", async (req: Request, res: Response) => {
 
     const { error: secretErr } = await supabase.from("game_state_secrets").insert({
       game_state_id: gs.id,
-      deck_seed: usedSeed,
+      deck_seed: deckSeed,
       full_board1: fullBoard1,
       full_board2: fullBoard2,
     });
@@ -220,7 +285,7 @@ app.post("/rooms/:roomId/start-hand", async (req: Request, res: Response) => {
       })
       .eq("id", roomId);
 
-    res.status(201).json({ gameState: gs, deckSeed: usedSeed });
+    res.status(201).json({ gameState: gs });
   } catch (err) {
     if (createdGameStateId) {
       await supabase.from("player_hands").delete().eq("game_state_id", createdGameStateId);
@@ -242,6 +307,9 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
   const payload = payloadResult.data;
 
   try {
+    const userId = await requireUser(req, res);
+    if (!userId) return;
+
     const room = await fetchRoom(roomId);
     if (!room) return res.status(404).json({ error: "Room not found" });
 
@@ -252,6 +320,31 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
     if (!secret) return res.status(500).json({ error: "Missing game secrets" });
 
     const players = await fetchPlayers(roomId);
+    const actingPlayer = players.find((p) => p.seat_number === payload.seatNumber);
+    if (!actingPlayer) return res.status(404).json({ error: "Seat not found" });
+    if (actingPlayer.auth_user_id && actingPlayer.auth_user_id !== userId) {
+      return res.status(403).json({ error: "You are not authorized to act for this seat" });
+    }
+    if (!actingPlayer.auth_user_id) {
+      await supabase
+        .from("room_players")
+        .update({ auth_user_id: userId })
+        .eq("id", actingPlayer.id);
+      actingPlayer.auth_user_id = userId;
+    }
+
+    if (payload.idempotencyKey) {
+      const { data: existing } = await supabase
+        .from("player_actions")
+        .select("*")
+        .eq("room_id", roomId)
+        .eq("seat_number", payload.seatNumber)
+        .eq("idempotency_key", payload.idempotencyKey)
+        .maybeSingle();
+      if (existing) {
+        return res.status(200).json({ ok: true, duplicate: true });
+      }
+    }
 
     const outcome = applyAction(
       {
@@ -277,7 +370,8 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
         processed: outcome.error ? false : true,
         processed_at: outcome.error ? null : new Date().toISOString(),
         error_message: outcome.error ?? null,
-        auth_user_id: payload.authUserId ?? null,
+        auth_user_id: userId,
+        idempotency_key: payload.idempotencyKey ?? null,
       });
 
     if (outcome.error) {
@@ -308,27 +402,35 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
 
     // If hand completed, write results and payouts
     if (outcome.handCompleted) {
-      if (outcome.autoWinners && outcome.potAwarded) {
-        // Fetch player hands for showdown evaluation
-        const { data: playerHands, error: handsErr } = await supabase
-          .from("player_hands")
-          .select("seat_number, cards")
-          .eq("game_state_id", gameState.id);
+      // Fetch player hands for showdown evaluation
+      const { data: playerHands, error: handsErr } = await supabase
+        .from("player_hands")
+        .select("seat_number, cards")
+        .eq("game_state_id", gameState.id);
 
-        if (handsErr) throw handsErr;
+      if (handsErr) throw handsErr;
 
-        // merge updated player snapshots to reflect latest chip/bet state before payouts
-        const mergedPlayers = players.map((p) => {
-          const updated = outcome.updatedPlayers.find((u) => u.id === p.id);
-          return updated ? { ...p, ...updated } : p;
-        });
+      // merge updated player snapshots to reflect latest chip/bet state before payouts
+      const mergedPlayers = players.map((p) => {
+        const updated = outcome.updatedPlayers.find((u) => u.id === p.id);
+        return updated ? { ...p, ...updated } : p;
+      });
 
+      const activePlayers = mergedPlayers.filter((p) => !p.has_folded);
+      let payouts: { seat: number; amount: number }[] = [];
+
+      if (activePlayers.length === 1) {
+        payouts = [
+          {
+            seat: activePlayers[0].seat_number,
+            amount: outcome.potAwarded ?? gameState.pot_size ?? 0,
+          },
+        ];
+      } else {
         // Determine winners using hand evaluation for double board PLO
         const board1 = secret.full_board1 || [];
         const board2 = secret.full_board2 || [];
 
-        // Filter to only active (non-folded) players
-        const activePlayers = mergedPlayers.filter((p) => !p.has_folded);
         const activeHands = (playerHands || [])
           .filter((ph) => activePlayers.some((p) => p.seat_number === ph.seat_number))
           .map((ph) => ({
@@ -342,54 +444,49 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
           board2,
         );
 
-        // Calculate payouts for double board
-        const payouts = endOfHandPayout(
-          board1Winners,
-          board2Winners,
-          outcome.potAwarded,
-        );
+        const sidePots = calculateSidePots(mergedPlayers);
+        payouts = endOfHandPayout(sidePots, board1Winners, board2Winners);
+      }
 
-        if (payouts.length) {
-          const creditUpdates = payouts
-            .map((p) => {
-              const player = mergedPlayers.find((pl) => pl.seat_number === p.seat);
-              return player
-                ? {
-                    id: player.id,
-                    room_id: player.room_id,
-                    seat_number: player.seat_number,
-                    auth_user_id: player.auth_user_id,
-                    display_name: player.display_name,
-                    total_buy_in: player.total_buy_in,
-                    chip_stack: (player.chip_stack ?? 0) + p.amount,
-                  }
-                : null;
-            })
-            .filter(Boolean) as Partial<RoomPlayer>[];
-            if (creditUpdates.length) {
-              const { error: creditErr } = await supabase.from("room_players").upsert(creditUpdates);
-              if (creditErr) throw creditErr;
-            }
-          }
-          const boardState = (gameState.board_state ?? null) as
-            | { board1?: string[]; board2?: string[] }
-            | null;
-
-          // Combine all unique winners for hand_results
-          const allWinners = Array.from(new Set([...board1Winners, ...board2Winners]));
-
-          const { error: resultsErr } = await supabase.from("hand_results").insert({
-            room_id: roomId,
-            hand_number: gameState.hand_number,
-            final_pot: outcome.potAwarded ?? gameState.pot_size ?? 0,
-            board_a: boardState?.board1 ?? null,
-            board_b: boardState?.board2 ?? null,
-            winners: allWinners,
-            action_history: outcome.updatedGameState.action_history ?? gameState.action_history,
-            shown_hands: null,
-          });
-          if (resultsErr) throw resultsErr;
+      if (payouts.length) {
+        const creditUpdates = payouts
+          .map((p) => {
+            const player = mergedPlayers.find((pl) => pl.seat_number === p.seat);
+            return player
+              ? {
+                  id: player.id,
+                  room_id: player.room_id,
+                  seat_number: player.seat_number,
+                  auth_user_id: player.auth_user_id,
+                  display_name: player.display_name,
+                  total_buy_in: player.total_buy_in,
+                  chip_stack: (player.chip_stack ?? 0) + p.amount,
+                }
+              : null;
+          })
+          .filter(Boolean) as Partial<RoomPlayer>[];
+        if (creditUpdates.length) {
+          const { error: creditErr } = await supabase.from("room_players").upsert(creditUpdates);
+          if (creditErr) throw creditErr;
         }
+      }
+      const boardState = (gameState.board_state ?? null) as
+        | { board1?: string[]; board2?: string[] }
+        | null;
+
+      const allWinners = payouts.map((p) => p.seat);
+
+      const { error: resultsErr } = await supabase.from("hand_results").insert({
+        room_id: roomId,
+        hand_number: gameState.hand_number,
+        final_pot: outcome.potAwarded ?? gameState.pot_size ?? 0,
+        board_a: boardState?.board1 ?? null,
+        board_b: boardState?.board2 ?? null,
+        winners: allWinners,
+        action_history: outcome.updatedGameState.action_history ?? gameState.action_history,
+        shown_hands: null,
+      });
+      if (resultsErr) throw resultsErr;
 
       // Delete game state to trigger hand completion
       const { error: deleteErr } = await supabase

@@ -18,4 +18,8 @@ const envSchema = z.object({
 export const env = envSchema.parse(process.env);
 export const port = Number(env.ENGINE_PORT ?? 3001);
 export const isProduction = (env.NODE_ENV ?? "development") === "production";
-export const corsOrigin = env.ENGINE_CORS_ORIGIN ?? "*";
+const defaultCors = "http://localhost:3000";
+if (isProduction && (env.ENGINE_CORS_ORIGIN ?? "*") === "*") {
+  throw new Error("ENGINE_CORS_ORIGIN cannot be '*' in production");
+}
+export const corsOrigin = env.ENGINE_CORS_ORIGIN ?? defaultCors;

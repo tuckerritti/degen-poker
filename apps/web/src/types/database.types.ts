@@ -183,6 +183,7 @@ export type Database = {
           error_message: string | null
           game_state_id: string | null
           id: string
+          idempotency_key: string | null
           processed: boolean | null
           processed_at: string | null
           room_id: string
@@ -196,6 +197,7 @@ export type Database = {
           error_message?: string | null
           game_state_id?: string | null
           id?: string
+          idempotency_key?: string | null
           processed?: boolean | null
           processed_at?: string | null
           room_id: string
@@ -209,6 +211,7 @@ export type Database = {
           error_message?: string | null
           game_state_id?: string | null
           id?: string
+          idempotency_key?: string | null
           processed?: boolean | null
           processed_at?: string | null
           room_id?: string

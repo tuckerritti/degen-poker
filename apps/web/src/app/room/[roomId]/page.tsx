@@ -17,7 +17,7 @@ export default function RoomPage({
   params: Promise<{ roomId: string }>;
 }) {
   const { roomId } = use(params);
-  const { sessionId, isLoading: sessionLoading } = useSession();
+  const { sessionId, accessToken, isLoading: sessionLoading } = useSession();
   const { players, loading: playersLoading, refetch: refetchPlayers } = useRoomPlayers(roomId);
   const { gameState } = useGameState(roomId);
   const { playerHand } = usePlayerHand(roomId, sessionId);
@@ -129,7 +129,7 @@ export default function RoomPage({
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({}),
-          });
+          }, accessToken);
 
           if (!response.ok) {
             const data = await response.json();
@@ -148,7 +148,7 @@ export default function RoomPage({
     } else {
       setNextHandCountdown(null);
     }
-  }, [gameState, room, players, roomId, sessionId]);
+  }, [gameState, room, players, roomId, sessionId, accessToken]);
 
   const handleSeatClick = (seatNumber: number) => {
     // Don't allow sitting if already at the table
@@ -177,9 +177,8 @@ export default function RoomPage({
           displayName,
           seatNumber: selectedSeat,
           buyIn: buyInAmount,
-          authUserId: sessionId,
         }),
-      });
+      }, accessToken);
 
       const data = await response.json();
 
@@ -220,7 +219,7 @@ export default function RoomPage({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
-      });
+      }, accessToken);
 
       const data = await response.json();
 
@@ -252,9 +251,9 @@ export default function RoomPage({
           seatNumber: myPlayer.seat_number,
           actionType,
           amount,
-          authUserId: sessionId,
+          idempotencyKey: crypto.randomUUID(),
         }),
-      });
+      }, accessToken);
 
       const data = await response.json();
 
