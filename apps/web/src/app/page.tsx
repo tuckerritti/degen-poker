@@ -61,6 +61,10 @@ export default function Home() {
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sessionId) return;
+    if (!process.env.NEXT_PUBLIC_ENGINE_URL) {
+      alert("Engine URL not configured");
+      return;
+    }
 
     const selectedConfig = GAME_MODES.find((mode) => mode.id === selectedMode);
     if (!selectedConfig?.enabled) return;
@@ -68,7 +72,9 @@ export default function Home() {
     setIsCreating(true);
 
     try {
-      const response = await fetch("/api/rooms/create", {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_ENGINE_URL.replace(/\/+$/, "")}/rooms`,
+        {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -76,8 +82,11 @@ export default function Home() {
           bigBlind,
           minBuyIn,
           maxBuyIn,
+          bombPotAnte: bigBlind * 2, // Bomb pot ante = 2x big blind
+          ownerAuthUserId: sessionId,
         }),
-      });
+        },
+      );
 
       const data = await response.json();
 

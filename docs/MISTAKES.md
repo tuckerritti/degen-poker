@@ -1,0 +1,22 @@
+# Common Mistakes When Building an Online Poker Site
+
+- Treating shuffling/RNG as an afterthought; skipping independent certification or failing to reseed properly leads to exploitable patterns.
+- Not double-auditing hand evaluation and side‑pot logic; edge cases (split pots, all‑ins, odd chip rules) often produce silent bankroll drift.
+- Allowing server to trust the client for bets, balances, or game state; all authoritative logic must be server-side.
+- Weak collusion/bot detection: no IP/device fingerprinting, timing analysis, or suspicious-pattern alerts, letting bad actors thrive.
+- Missing geolocation and KYC/AML enforcement per jurisdiction, exposing the site to regulatory shutdowns and payment freezes.
+- Handling money like game credits: improper ledgering, non-atomic updates, and lack of reconciliation with payment processors cause balance mismatches.
+- Inadequate rake and fee math: rounding errors, cap misapplication, or incorrect tournament payouts break financial fairness.
+- Poor websocket/session resilience: no heartbeats, backoff, or state resync means players lose action after brief network hiccups.
+- Skipping TLS everywhere or storing passwords without modern hashing (bcrypt/argon2) and proper secret rotation.
+- Logging sensitive data (PANs, passwords, access tokens, or full hand histories) without redaction or retention limits.
+- No responsible gaming features (limits, self-exclusion, cool‑offs) or age verification, risking compliance and player trust.
+- Ignoring accessibility, mobile ergonomics, and low-bandwidth modes; critical controls become unusable on real devices.
+- Not rate-limiting auth, deposits, or promo endpoints, making brute-force and bonus abuse inexpensive for attackers.
+- Mixing staging and production keys/endpoints; accidental use of real money in tests or test funds in production.
+- Lacking disaster recovery: no hot backups, region redundancy, or tested restore runbooks; a single outage can wipe bankrolls.
+- Skipping third-party security and fairness audits; “trust us” messaging fails for real-money players and regulators.
+- Missing observability: absent structured logs/metrics/traces around table actions delays incident response and fraud detection.
+- Overlooking content and term updates per locale (CCPA/GDPR consent, cookies, ToS), inviting fines or takedowns.
+- UI/UX that hides critical info (pot size, action order, bet sizing presets) causing misclicks and disputes.
+- Failing to simulate load and latency; optimistic client timing can desync blinds, clocks, and tournament breaks at scale.

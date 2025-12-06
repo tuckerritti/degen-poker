@@ -13,6 +13,38 @@ export function useRoomPlayers(roomId: string | null) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Exposed refetch function
+  const refetch = async () => {
+    if (!roomId) return;
+
+    try {
+      clientLogger.debug("useRoomPlayers: Manual refetch", { roomId });
+      const supabase = getBrowserClient();
+      const { data, error } = await supabase
+        .from("room_players")
+        .select("*")
+        .eq("room_id", roomId)
+        .order("seat_number", { ascending: true });
+
+      if (error) {
+        clientLogger.error("useRoomPlayers: Error refetching players", error);
+        setError(error.message);
+      } else {
+        clientLogger.info("useRoomPlayers: Players refetched", {
+          roomId,
+          playerCount: data?.length || 0,
+        });
+        setPlayers(data || []);
+      }
+    } catch (err) {
+      clientLogger.error(
+        "useRoomPlayers: Unexpected refetch error",
+        err instanceof Error ? err : new Error(String(err)),
+      );
+      setError("Failed to refetch players");
+    }
+  };
+
   useEffect(() => {
     if (!roomId) {
       setLoading(false);
@@ -73,7 +105,15 @@ export function useRoomPlayers(roomId: string | null) {
             seatNumber: newPlayer.seat_number,
             displayName: newPlayer.display_name,
           });
-          setPlayers((prev) => [...prev, newPlayer]);
+          setPlayers((prev) => {
+            // Avoid duplicates if player already exists
+            if (prev.some((p) => p.id === newPlayer.id)) {
+              return prev;
+            }
+            return [...prev, newPlayer].sort(
+              (a, b) => a.seat_number - b.seat_number,
+            );
+          });
         },
       )
       .on(
@@ -112,7 +152,12 @@ export function useRoomPlayers(roomId: string | null) {
           setPlayers((prev) => prev.filter((p) => p.id !== payload.old.id));
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        clientLogger.info("useRoomPlayers: Subscription status", {
+          roomId,
+          status,
+        });
+      });
 
     return () => {
       clientLogger.debug("useRoomPlayers: Unsubscribing", { roomId });
@@ -120,5 +165,5 @@ export function useRoomPlayers(roomId: string | null) {
     };
   }, [roomId]);
 
-  return { players, loading, error };
+  return { players, loading, error, refetch };
 }

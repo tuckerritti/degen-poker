@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 interface CardProps {
   card: string; // e.g., "Ah", "Kd", "7s", "3c"
   faceDown?: boolean;
@@ -45,10 +47,14 @@ export function Card({ card, faceDown = false, size = "md" }: CardProps) {
       <div
         className={`${config.container} ${config.rounded} ${config.border} border-gray-600 shadow-lg overflow-hidden`}
       >
-        <img
+        {/* Using next/image for optimized delivery */}
+        <Image
           src="/card-back.jpg"
           alt="Card back"
-          className="h-full w-full object-cover"
+          fill
+          sizes="(max-width: 640px) 64px, 128px"
+          className="object-cover"
+          priority
         />
       </div>
     );

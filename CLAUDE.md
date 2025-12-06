@@ -4,232 +4,321 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a **Double Board Bomb Pot PLO (Pot-Limit Omaha)** poker application built with Next.js 16, Supabase, and TypeScript. Players can create rooms, join tables, and play hands with real-time updates. The core innovation is a security-first architecture using Row Level Security (RLS) to prevent players from seeing each other's hole cards.
+This is a **Double Board Bomb Pot PLO (Pot-Limit Omaha)** poker application built as a Turborepo monorepo. The architecture separates game logic into an Express engine service and a Next.js web frontend, with Supabase providing database and real-time subscriptions.
+
+**Key Innovation:** Security-first architecture where hole cards are stored server-side in RLS-protected tables, preventing players from seeing each other's hands via client-side manipulation.
 
 ## Development Commands
 
 ```bash
 # Development
-npm run dev              # Start dev server at http://localhost:3000
+npm run dev                           # Start both engine (3001) and web (3000)
+npm run dev --workspace apps/engine   # Engine only with hot reload (tsx watch)
+npm run dev --workspace apps/web      # Web only (Next.js Turbopack)
 
-# Building
-npm run build            # Production build
-npm start                # Start production server
+# Building & Linting
+npm run build                         # Turbo build all workspaces
+npm run lint                          # Turbo lint all workspaces
+npm run lint --workspace apps/engine  # Engine lint + typecheck
+npm run lint --workspace apps/web     # Web lint only
 
-# Code quality
-npm run lint             # Run ESLint
-npm run format           # Format code with Prettier
-npm run format:check     # Check formatting without writing
+# Code Formatting
+npm run format                        # Format code with Prettier
+npm run format:check                  # Check formatting without writing
 
 # Supabase
-npm run update-types     # Generate TypeScript types from local Supabase schema
-supabase db reset        # Reset local database with migrations
+npm run update-types                  # Generate TypeScript types from local Supabase
+supabase db reset                     # Reset local DB and apply migrations
+```
+
+**IMPORTANT:** Always run `npm run build` and `npm run lint` after making changes. Fix all errors before committing.
+
+## Project Structure
+
+```
+apps/
+├── engine/          Express service with game logic (uses service role)
+│   └── src/
+│       ├── index.ts      # REST API routes
+│       ├── logic.ts      # Core game logic (dealHand, applyAction, payouts)
+│       ├── deck.ts       # Card shuffling with deterministic seed
+│       ├── secrets.ts    # Fetch game_state_secrets (full board, deck seed)
+│       ├── supabase.ts   # Supabase client (service role)
+│       └── types.ts      # Engine-specific types
+├── web/             Next.js 16 frontend
+│   └── src/
+│       ├── app/          # Next.js app router
+│       ├── components/   # React components
+│       ├── lib/
+│       │   ├── hooks/        # Real-time subscription hooks
+│       │   ├── poker/        # Client-side poker utilities
+│       │   ├── supabase/     # Supabase client setup
+│       │   └── engineClient.ts  # Helper to call engine API
+│       └── types/        # Database types (auto-generated)
+packages/
+└── shared/          Shared enums and payload types
+supabase/
+└── migrations/      SQL migrations (schema + RLS policies)
 ```
 
 ## Core Architecture
 
-### Security Model (Critical)
+### Service Separation
 
-This application follows a **security-first poker architecture** where private information is strictly separated from public game state:
+**Engine Service** (`apps/engine`, port 3001):
+- Express REST API with Zod validation
+- Uses Supabase **service role** key to bypass RLS
+- Handles all game logic (dealing, action processing, payouts)
+- Manages secrets (deck seeds, full boards) via `game_state_secrets` table
+- No authentication - players identified by seat number + optional `auth_user_id`
 
-1. **Public Game State** (`game_states` table)
-   - Contains pot size, current bet, phase, button position
-   - Contains community cards in `board_state` JSONB field
-   - Does NOT contain any player hole cards
+**Web Frontend** (`apps/web`, port 3000):
+- Next.js 16 with app router
+- Calls engine API via `engineClient.ts` helper
+- Subscribes to Supabase real-time updates for UI reactivity
+- Uses Supabase **publishable key** (limited by RLS)
+
+### Security Model: Preventing Hole Card Leaks
+
+The application prevents players from seeing each other's hole cards through a **server-authoritative** architecture:
+
+1. **`game_state_secrets` table** (server-only):
+   - Stores `deck_seed`, `full_board1`, `full_board2` for each hand
+   - RLS policy: only `service_role` can read/write
+   - Never exposed to clients
+
+2. **`player_hands` table** (RLS-protected):
+   - Each player's 4 hole cards stored as JSONB
+   - RLS policy: players can only query rows where `auth_user_id = auth.uid()`
+   - Real-time subscriptions filtered by `auth_user_id`
+   - Server uses service role to read all hands during showdown
+
+3. **`game_states` table** (public, no secrets):
+   - Contains `board_state` JSONB with visible community cards
+   - Reveals cards progressively: 3 on flop, 4 on turn, 5 on river
+   - Does NOT contain `deck_seed` (shows `"hidden"` instead)
    - Everyone can subscribe to this table
 
-2. **Private Player Hands** (`player_hands` table)
-   - Contains hole cards for each player in the current hand
-   - Protected by Row Level Security (RLS)
-   - Players can only query their own session_id
-   - Realtime subscriptions are filtered by `session_id`
-   - Server routes use service role to access all hands during showdown
-
-3. **Anonymous Sessions**
-   - No authentication - players identified by browser `session_id`
-   - Session IDs stored in cookies and used for RLS filtering
-   - Owner of room tracks via `owner_session_id`
-
-### Database Schema
-
-**Tables:**
-
-- `rooms` - Poker tables/lobbies with game configuration
-- `room_players` - Players seated at tables with chip stacks
-- `game_states` - Current hand state (PUBLIC, no hole cards)
-- `player_hands` - Private hole cards (RLS protected)
-- `player_actions` - Action queue for processing
-- `hand_results` - Archive of completed hands
-
-**Key JSONB Fields:**
-
-- `game_states.board_state` - `{"board1": ["Ah", "Kh", "7d"], "board2": ["2s", "9c", "Qd"]}`
-- `player_hands.cards` - `["As", "Ks", "Qh", "Jh"]` (4 cards for PLO)
-- `game_states.action_history` - Array of action objects
+4. **Card dealing flow**:
+   - Engine generates `deck_seed`, shuffles deck deterministically
+   - Deals 4 cards to each player, stores in `player_hands`
+   - Deals 10 cards (5 per board), stores full boards in `game_state_secrets`
+   - Writes partial boards (3 cards each) to `game_states.board_state`
+   - As betting rounds complete, reveals 4th and 5th cards by updating `board_state`
 
 ### Real-time Architecture
 
-The app uses Supabase Realtime with `postgres_changes` subscriptions:
+All real-time updates use Supabase `postgres_changes` subscriptions:
 
-1. **Game State Hook** (`useGameState`)
-   - Subscribes to `game_states` table filtered by `room_id`
-   - Updates when pot, phase, or board cards change
-   - Handles DELETE events when hand completes
+**`useGameState(roomId)`** (`apps/web/src/lib/hooks/useGameState.ts`):
+- Subscribes to `game_states` filtered by `room_id`
+- Updates on pot changes, phase transitions, board reveals
+- Handles DELETE events when hand completes
 
-2. **Player Hand Hook** (`usePlayerHand`)
-   - Subscribes to `player_hands` filtered by `session_id=eq.${sessionId}`
-   - RLS ensures players only receive their own cards
-   - Critical for anti-cheating
+**`usePlayerHand(roomId, authUserId)`**:
+- Subscribes to `player_hands` filtered by `auth_user_id`
+- RLS ensures players only receive their own cards
+- Critical anti-cheating measure
 
-3. **Room Players Hook** (`useRoomPlayers`)
-   - Subscribes to `room_players` table
-   - Updates when players join/leave or chip stacks change
+**`useRoomPlayers(roomId)`**:
+- Subscribes to `room_players` table
+- Updates when players join/leave or chip stacks change
 
 ### Data Flow
 
-**Dealing a Hand:**
+**Starting a Hand:**
+1. Web calls `POST /rooms/:roomId/start-hand` on engine
+2. Engine calls `dealHand()` from `logic.ts`:
+   - Generates `deck_seed` (UUID)
+   - Shuffles deck deterministically
+   - Deals 4 cards to each active player
+   - Deals 5 cards to each of two boards
+   - Collects antes, updates chip stacks
+3. Engine writes to DB:
+   - `game_state_secrets` (full boards, seed)
+   - `player_hands` (one row per player)
+   - `game_states` (partial boards, pot, phase)
+   - `room_players` (updated chip stacks)
+4. Web receives real-time updates via subscriptions
 
-1. Frontend calls `/api/game/deal-hand` (owner only)
-2. Server collects antes from all players
-3. Server generates `deck_seed`, shuffles deterministically
-4. Server deals 4 hole cards to each player
-5. Server inserts into `player_hands` table (one row per player)
-6. Server deals flop to both boards, stores in `board_state` JSONB
-7. Server creates `game_states` record
-8. Clients receive updates via Realtime subscriptions
+**Processing Actions:**
+1. Web calls `POST /rooms/:roomId/actions` on engine
+2. Engine validates turn order, fetches `game_state_secrets`
+3. Engine calls `applyAction()` from `logic.ts`:
+   - Updates pot, bets, chip stacks
+   - Determines if street is complete
+   - If complete, advances phase and reveals next board cards
+   - If hand complete, triggers payout
+4. Engine writes `player_actions` log and updates `game_states`
+5. Web receives real-time update with new phase/board
 
-**Player Action Flow:**
-
-1. Frontend submits action via `/api/game/submit-action`
-2. Server validates it's player's turn
-3. Server inserts into `player_actions` queue
-4. Server immediately processes action (updates chip stacks, pot, phase)
-5. If betting round complete, server deals next street
-6. If river complete, advances to showdown
-7. Clients receive updates via `game_states` subscription
-
-**Showdown Resolution:**
-
-1. Auto-triggers after 5 seconds in showdown phase
-2. Frontend calls `/api/game/resolve-hand`
-3. Server fetches all `player_hands` using service role
-4. Server evaluates winners (currently placeholder - splits pot equally)
-5. Server updates chip stacks
-6. Server archives to `hand_results`
-7. Server deletes `game_states` record (triggers real-time DELETE event)
-
-### Type Generation
-
-Database types are auto-generated from the Supabase schema:
-
-- **Source:** `supabase/migrations/20251130000000_initial_schema.sql`
-- **Generated:** `src/types/database.types.ts` (via `npm run update-types`)
-- **Wrapper:** `src/types/database.ts` (convenience type exports)
-
-Always regenerate types after schema changes.
-
-### Card Representation
-
-Cards are stored as **2-character strings**: `"Ah"`, `"Kd"`, `"7s"`, `"2c"`
-
-- First character: rank (`A`, `K`, `Q`, `J`, `T`, `9`-`2`)
-- Second character: suit (`h`=hearts, `d`=diamonds, `c`=clubs, `s`=spades)
-
-The deck is shuffled deterministically using a `deck_seed` (UUID) stored in `game_states`. This allows for hand reconstruction and auditing.
-
-## File Organization
-
-```
-src/
-├── app/
-│   ├── api/              # Next.js API routes (server-side only)
-│   │   ├── game/         # Game actions (deal, submit-action, resolve)
-│   │   ├── rooms/        # Room management (create, join)
-│   │   └── players/      # Player actions (rebuy)
-│   ├── room/[roomId]/    # Dynamic room page
-│   └── page.tsx          # Home page (room creation)
-├── components/
-│   └── poker/            # Poker-specific UI components
-├── lib/
-│   ├── poker/            # Core poker logic (deck, betting, pot-splitter)
-│   ├── hooks/            # React hooks for Realtime subscriptions
-│   ├── supabase/         # Supabase client setup (browser vs server)
-│   └── validation/       # Zod schemas for API validation
-└── types/
-    ├── database.types.ts # Auto-generated from Supabase
-    └── database.ts       # Convenience type exports
-```
+**Hand Completion:**
+- Triggered automatically when only one player remains or river completes
+- Engine determines winners (currently splits pot equally - **TODO: implement PLO hand evaluation**)
+- Engine calls `endOfHandPayout()` to distribute pot
+- Engine updates `room_players` chip stacks
+- Engine writes `hand_results` archive
+- Engine deletes `game_states` row (triggers real-time DELETE event)
 
 ## Important Patterns
 
 ### Supabase Client Usage
 
-**Browser (Client Components):**
+**Engine (server-side):**
+```typescript
+import { supabase } from "./supabase.js";  // Uses service role key
+```
 
+**Web (client-side):**
 ```typescript
 import { getBrowserClient } from "@/lib/supabase/client";
-const supabase = getBrowserClient();
+const supabase = getBrowserClient();  // Uses publishable key
 ```
 
-**Server (API Routes):**
+### Calling Engine API from Web
 
 ```typescript
-import { getServerClient } from "@/lib/supabase/server";
-const supabase = await getServerClient(); // Note: async!
-```
+import { engineFetch } from "@/lib/engineClient";
 
-Server routes use the **publishable key** (not service role) but benefit from cookie-based auth. Service role access happens implicitly via RLS policies.
+const response = await engineFetch("/rooms/abc-123/start-hand", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ deckSeed: "optional-seed" }),
+});
+```
 
 ### Real-time Subscription Pattern
 
-All hooks follow this pattern:
+All hooks in `apps/web/src/lib/hooks/` follow this pattern:
 
 1. Initial fetch with `.single()` or `.maybeSingle()`
 2. Subscribe to `postgres_changes` with filter
-3. Handle INSERT/UPDATE/DELETE events
+3. Handle INSERT/UPDATE/DELETE events in callback
 4. Return cleanup function to unsubscribe
 
-### API Route Pattern
+### Engine API Route Pattern
 
-1. Parse and validate request body with Zod schema
-2. Get server Supabase client
-3. Verify authorization (session_id, ownership, etc.)
-4. Execute database operations
-5. Return JSON response with proper status codes
-6. Catch Zod errors separately from other errors
+See `apps/engine/src/index.ts`:
+
+1. Define Zod schema for request validation
+2. Parse request with `schema.parse()` or `.safeParse()`
+3. Fetch required data from Supabase
+4. Call pure logic functions from `logic.ts`
+5. Write results to DB with error handling
+6. Return JSON response with proper status codes
+
+### Type Generation
+
+Database types are auto-generated from Supabase schema:
+
+- **Source:** `supabase/migrations/*.sql`
+- **Generated:** `apps/web/src/types/database.types.ts`
+- **Command:** `npm run update-types`
+
+**ALWAYS regenerate types after schema changes.**
+
+### Card Representation
+
+Cards are **2-character strings**: `"Ah"`, `"Kd"`, `"7s"`, `"2c"`
+
+- First character: rank (`A`, `K`, `Q`, `J`, `T`, `9`-`2`)
+- Second character: suit (`h`=hearts, `d`=diamonds, `c`=clubs, `s`=spades)
+
+Decks are shuffled deterministically using `seedrandom` with a UUID seed stored in `game_state_secrets.deck_seed`. This allows hand reconstruction and auditing.
+
+### JSONB Fields
+
+Supabase returns JSONB as `unknown`, so explicit casting is required:
+
+```typescript
+const boardState = gameState.board_state as unknown as {
+  board1?: string[];
+  board2?: string[];
+};
+const cards = playerHand.cards as unknown as string[];
+```
+
+**Common JSONB fields:**
+- `game_states.board_state`: `{ board1: ["Ah", "Kh", "7d"], board2: [...] }`
+- `player_hands.cards`: `["As", "Ks", "Qh", "Jh"]` (4 PLO hole cards)
+- `game_states.action_history`: Array of action objects
+- `game_states.side_pots`: Array of side pot objects (not yet implemented)
+
+## Database Schema
+
+**Key tables:**
+
+- `rooms` - Poker tables with game configuration (blinds, antes, max players)
+- `room_players` - Players seated at tables with chip stacks, current bets
+- `game_states` - Current hand state (PUBLIC, no deck seed or full boards)
+- `game_state_secrets` - Server-only secrets (deck seed, full boards)
+- `player_hands` - Private hole cards (RLS protected by `auth_user_id`)
+- `player_actions` - Action queue/log for auditing
+- `hand_results` - Archive of completed hands
+
+**RLS Policies:**
+- Most tables allow public reads (`for select using (true)`)
+- Writes restricted to `service_role`
+- `player_hands` has special policy: `for select using (auth.uid() = auth_user_id)`
+- `game_state_secrets` completely blocked from non-service-role clients
+
+## Shared Package
+
+`packages/shared` exports TypeScript types and enums used by both engine and web:
+
+- `ActionType`, `GamePhase`, `GameMode` enums
+- Payload interfaces: `CreateRoomPayload`, `JoinRoomPayload`, `ActionRequestPayload`, etc.
+- Ensures type consistency across services
+
+## Environment Setup
+
+**Engine** (`apps/engine/.env.local`):
+```
+SUPABASE_URL=http://127.0.0.1:54321
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+ENGINE_PORT=3001
+CORS_ORIGIN=http://localhost:3000
+```
+
+**Web** (`apps/web/.env.local`):
+```
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-anon-key
+NEXT_PUBLIC_ENGINE_URL=http://localhost:3001
+```
+
+Copy from `apps/engine/env.sample` and `apps/web/env.sample`.
 
 ## Common Pitfalls
 
-1. **Board not showing when joining:** The board only appears after the owner clicks "Deal Hand". Before that, `gameState` is null. The UI checks `gameState && boardA.length > 0` before rendering community cards.
+1. **Board not showing:** Boards only appear after calling `POST /start-hand`. Check `gameState && boardState.board1?.length > 0` before rendering.
 
-2. **Type casting JSONB fields:** Supabase returns JSONB as `unknown`, so cast explicitly:
+2. **Type casting JSONB:** Always cast JSONB fields explicitly (Supabase returns `unknown`).
 
+3. **RLS vs Service Role:** Engine uses service role to bypass RLS. Web uses publishable key and is restricted by RLS policies.
+
+4. **Deck shuffling:** Always use `shuffleDeck(seed)` with the seed from `game_state_secrets.deck_seed`. Never generate new seeds when revealing turn/river cards.
+
+5. **JSONB updates:** Create new objects when updating board state:
    ```typescript
-   const boardState = gameState.board_state as unknown as BoardState;
-   const cards = playerHand.cards as unknown as string[];
-   ```
-
-3. **RLS vs Service Role:** The schema uses RLS policies that allow public reads (`USING (true)`) but filtering happens at the application layer via Supabase subscriptions. The server uses the publishable key, not a service role key.
-
-4. **Deck shuffling:** Always use `shuffleDeck(seed)` with the seed from `game_states.deck_seed`. Never generate a new seed when dealing turn/river.
-
-5. **JSONB updates:** When updating `board_state`, create a new object:
-   ```typescript
-   const updatedBoardState: BoardState = {
-     board1: [...board1, deck[cardIndex++]],
-     board2: [...board2, deck[cardIndex++]],
+   const updatedBoardState = {
+     board1: [...existingBoard1, newCard],
+     board2: [...existingBoard2, newCard],
    };
    await supabase
      .from("game_states")
-     .update({ board_state: updatedBoardState as unknown as any });
+     .update({ board_state: updatedBoardState as unknown as any })
+     .eq("id", gameStateId);
    ```
 
-## TODO / Known Limitations
+6. **Database changes:** ALWAYS use Supabase migrations (`supabase/migrations/*.sql`). Never modify schema manually.
 
-- **Hand evaluation:** The `splitPot()` function currently splits pots equally among all players. Actual PLO hand evaluation needs to be implemented.
-- **Side pots:** `createSidePots()` logic exists but is not integrated into the hand resolution flow.
-- **Timeouts:** Action deadlines are set but not enforced (no auto-fold on timeout).
-- **Disconnection handling:** No reconnection logic or sitting out due to disconnect.
-- **Rebuy functionality:** API route exists but UI is not implemented.
-- alwyas use supabase migrations for database updates
-- run linter and builder after changes are done, and fix issues
+7. **After schema changes:** Run `npm run update-types` to regenerate TypeScript types.
+
+## Known Limitations / TODOs
+
+- **Hand evaluation:** `endOfHandPayout()` currently splits pots equally among all non-folded players. Actual PLO hand evaluation using `@poker-apprentice/hand-evaluator` needs implementation.
+- **Side pots:** Logic exists in `game_states.side_pots` JSONB field but is not calculated or awarded.
+- **Action timeouts:** `action_deadline_at` is set but not enforced (no auto-fold).
+- **Disconnection handling:** No reconnection logic or auto-sit-out.
+- **Authentication:** Currently anonymous (players identified by seat only). `auth_user_id` fields exist but are optional.

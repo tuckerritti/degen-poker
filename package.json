@@ -8,10 +8,10 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "turbo dev --filter=web",
+    "dev": "turbo dev --parallel --filter=engine --filter=web",
     "build": "turbo build",
     "lint": "turbo lint",
-    "update-types": "npx supabase gen types typescript --local --schema public > apps/web/src/types/database.types.ts",
+    "update-types": "cd supabase && supabase gen types typescript --local --schema public > ../apps/web/src/types/database.types.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

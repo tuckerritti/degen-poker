@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "setup": "npm install && cp $CONDUCTOR_ROOT_PATH/.env apps/web/.env",
+    "setup": "npm install && (cp -n apps/web/env.sample apps/web/.env.local 2>/dev/null || true) && (cp -n apps/engine/env.sample apps/engine/.env.local 2>/dev/null || true)",
     "run": "npm run dev"
   }
 }

@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 const nextConfig: NextConfig = {
   /* config options here */
@@ -6,8 +7,12 @@ const nextConfig: NextConfig = {
   // External packages for server components
   serverExternalPackages: ["pino", "pino-pretty"],
   turbopack: {
-    // Force root to the app workspace so .env and lockfiles resolve correctly
-    root: __dirname,
+    // Force root to monorepo root so Turbopack finds hoisted deps
+    root: path.join(__dirname, "..", ".."),
+    // Ensure Next can resolve workspace packages (monorepo)
+    resolveAlias: {
+      "@": "./src",
+    },
   },
 };
 

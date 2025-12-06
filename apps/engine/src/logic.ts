@@ -1,0 +1,591 @@
+import { randomUUID } from "crypto";
+import { ActionType, GamePhase } from "@poker/shared";
+import { Card, shuffleDeck } from "./deck.js";
+import type { GameStateRow, Room, RoomPlayer } from "./types.js";
+import { evaluateOmaha } from "@poker-apprentice/hand-evaluator";
+
+export interface DealResult {
+  gameState: Partial<GameStateRow>;
+  playerHands: { seat_number: number; cards: string[]; auth_user_id: string | null }[];
+  updatedPlayers: Partial<RoomPlayer>[];
+  deckSeed: string;
+  fullBoard1: string[];
+  fullBoard2: string[];
+}
+
+export function nextButtonSeat(players: RoomPlayer[], currentButton: number | null): number {
+  if (players.length === 0) return 1;
+  const seats = players
+    .map((p) => p.seat_number)
+    .sort((a, b) => a - b);
+  if (currentButton === null) return seats[0];
+  const next = seats.find((s) => s > currentButton);
+  return next ?? seats[0];
+}
+
+export function actionOrder(players: RoomPlayer[], buttonSeat: number): number[] {
+  const activeSeats = players
+    .filter((p) => !p.is_spectating && !p.is_sitting_out && p.chip_stack > 0)
+    .map((p) => p.seat_number)
+    .sort((a, b) => a - b);
+  if (activeSeats.length === 0) return [];
+  const afterButton = activeSeats.filter((s) => s > buttonSeat);
+  const beforeButton = activeSeats.filter((s) => s <= buttonSeat);
+  return [...afterButton, ...beforeButton];
+}
+
+function dealBoards(deck: Card[]): { board1: Card[]; board2: Card[]; remaining: Card[] } {
+  const board1 = deck.slice(0, 5);
+  const board2 = deck.slice(5, 10);
+  const remaining = deck.slice(10);
+  return { board1, board2, remaining };
+}
+
+export function dealHand(room: Room, players: RoomPlayer[], providedSeed?: string): DealResult {
+  const deckSeed = providedSeed ?? randomUUID();
+  const deck = shuffleDeck(deckSeed);
+
+  const activePlayers = players.filter(
+    (p) => !p.is_spectating && !p.is_sitting_out && p.chip_stack > 0,
+  );
+
+  // deal four cards to each active seat
+  let cursor = 0;
+  const playerHands = activePlayers.map((p) => {
+    const cards = deck.slice(cursor, cursor + 4);
+    cursor += 4;
+    return { seat_number: p.seat_number, cards, auth_user_id: p.auth_user_id };
+  });
+
+  const { board1, board2 } = dealBoards(deck.slice(cursor));
+
+  // antes
+  const ante = room.bomb_pot_ante ?? 0;
+  const updatedPlayers: Partial<RoomPlayer>[] = activePlayers.map((p) => {
+    const antePaid = Math.min(p.chip_stack, ante);
+    const remaining = p.chip_stack - antePaid;
+    return {
+      id: p.id,
+      room_id: p.room_id,
+      seat_number: p.seat_number,
+      auth_user_id: p.auth_user_id,
+      display_name: p.display_name,
+      total_buy_in: p.total_buy_in,
+      chip_stack: remaining,
+      total_invested_this_hand: antePaid,
+      current_bet: antePaid,
+      has_folded: false,
+      is_all_in: remaining === 0,
+    } as Partial<RoomPlayer>;
+  });
+
+  const totalAnte = ante * activePlayers.length;
+  const buttonSeat = nextButtonSeat(activePlayers, room.button_seat);
+  const order = actionOrder(activePlayers, buttonSeat);
+  const seatsToAct = order.filter((s) => !updatedPlayers.find((p) => p.seat_number === s)?.is_all_in);
+  const currentActor = seatsToAct[0] ?? null;
+
+  const gameState: Partial<GameStateRow> = {
+    room_id: room.id,
+    hand_number: room.current_hand_number + 1,
+    deck_seed: "hidden",
+    button_seat: buttonSeat,
+    phase: "flop",
+    pot_size: totalAnte,
+    current_bet: ante > 0 ? ante : 0,
+    min_raise: room.big_blind,
+    current_actor_seat: currentActor,
+    last_aggressor_seat: null,
+    last_raise_amount: null,
+    action_deadline_at: null,
+    action_reopened_to: null,
+    seats_to_act: seatsToAct,
+    seats_acted: [],
+    burned_card_indices: [],
+    board_state: {
+      board1: board1.slice(0, 3),
+      board2: board2.slice(0, 3),
+    },
+    side_pots: [],
+    action_history: [],
+  };
+
+  return { gameState, playerHands, updatedPlayers, deckSeed, fullBoard1: board1, fullBoard2: board2 };
+}
+
+export interface ActionContext {
+  room: Room;
+  players: RoomPlayer[];
+  gameState: GameStateRow;
+  fullBoard1: string[];
+  fullBoard2: string[];
+}
+
+export interface ActionOutcome {
+  updatedGameState: Partial<GameStateRow>;
+  updatedPlayers: Partial<RoomPlayer>[];
+  handCompleted: boolean;
+  autoWinners?: number[];
+  potAwarded?: number;
+  error?: string;
+}
+
+function activeNonFolded(players: RoomPlayer[]): RoomPlayer[] {
+  return players.filter((p) => !p.has_folded && !p.is_spectating && !p.is_sitting_out && p.chip_stack >= 0);
+}
+
+function rotateAfter(seats: number[], current: number): number[] {
+  const greater = seats.filter((s) => s > current);
+  const lesser = seats.filter((s) => s !== current && s <= current);
+  return [...greater, ...lesser];
+}
+
+export function applyAction(
+  ctx: ActionContext,
+  seatNumber: number,
+  actionType: ActionType,
+  amount?: number,
+): ActionOutcome {
+  const { gameState, players, room, fullBoard1, fullBoard2 } = ctx;
+
+  if (gameState.current_actor_seat !== seatNumber && gameState.phase !== "showdown") {
+    return { updatedGameState: {}, updatedPlayers: [], handCompleted: false, error: "Not your turn" };
+  }
+
+  const player = players.find((p) => p.seat_number === seatNumber);
+  if (!player) {
+    return { updatedGameState: {}, updatedPlayers: [], handCompleted: false, error: "Seat not found" };
+  }
+
+  if (player.has_folded || player.is_spectating || player.is_sitting_out) {
+    return { updatedGameState: {}, updatedPlayers: [], handCompleted: false, error: "Player cannot act" };
+  }
+
+  let pot = gameState.pot_size ?? 0;
+  let currentBet = gameState.current_bet ?? 0;
+  let minRaise = gameState.min_raise ?? room.big_blind;
+  const updatedPlayers: Partial<RoomPlayer>[] = [];
+  let seatsToAct = [...(gameState.seats_to_act ?? [])];
+  let seatsActed = [...(gameState.seats_acted ?? [])];
+  let phase: GamePhase = gameState.phase;
+  const actionHistory = Array.isArray(gameState.action_history)
+    ? [...(gameState.action_history as unknown[])]
+    : [];
+  const boardState = (gameState.board_state as {
+    board1?: string[];
+    board2?: string[];
+  }) ?? {};
+
+  const markActed = () => {
+    seatsToAct = seatsToAct.filter((s) => s !== seatNumber);
+    if (!seatsActed.includes(seatNumber)) seatsActed.push(seatNumber);
+  };
+
+  const invest = (chipAmount: number) => {
+    const investAmount = Math.min(player.chip_stack, chipAmount);
+    pot += investAmount;
+    const newStack = player.chip_stack - investAmount;
+    const newCurrentBet = (player.current_bet ?? 0) + investAmount;
+    updatedPlayers.push({
+      id: player.id,
+      room_id: player.room_id,
+      seat_number: player.seat_number,
+      auth_user_id: player.auth_user_id,
+      display_name: player.display_name,
+      total_buy_in: player.total_buy_in,
+      chip_stack: newStack,
+      current_bet: newCurrentBet,
+      total_invested_this_hand: (player.total_invested_this_hand ?? 0) + investAmount,
+      is_all_in: newStack === 0,
+    });
+    player.chip_stack = newStack;
+    player.current_bet = newCurrentBet;
+    player.total_invested_this_hand = (player.total_invested_this_hand ?? 0) + investAmount;
+    if (newStack === 0) player.is_all_in = true;
+  };
+
+  switch (actionType) {
+    case "fold": {
+      updatedPlayers.push({
+        id: player.id,
+        room_id: player.room_id,
+        seat_number: player.seat_number,
+        auth_user_id: player.auth_user_id,
+        display_name: player.display_name,
+        total_buy_in: player.total_buy_in,
+        chip_stack: player.chip_stack,
+        has_folded: true
+      });
+      player.has_folded = true;
+      markActed();
+      break;
+    }
+    case "check": {
+      if ((gameState.current_bet ?? 0) !== (player.current_bet ?? 0)) {
+        return { updatedGameState: {}, updatedPlayers: [], handCompleted: false, error: "Cannot check facing bet" };
+      }
+      markActed();
+      break;
+    }
+    case "call": {
+      const diff = (gameState.current_bet ?? 0) - (player.current_bet ?? 0);
+      if (diff <= 0) {
+        return { updatedGameState: {}, updatedPlayers: [], handCompleted: false, error: "Nothing to call" };
+      }
+      invest(diff);
+      markActed();
+      break;
+    }
+    case "bet": {
+      if (currentBet > 0) {
+        return { updatedGameState: {}, updatedPlayers: [], handCompleted: false, error: "Bet not allowed after bet" };
+      }
+      if (!amount || amount <= 0) {
+        return { updatedGameState: {}, updatedPlayers: [], handCompleted: false, error: "Bet amount required" };
+      }
+      currentBet = amount;
+      minRaise = amount;
+      invest(amount);
+      seatsToAct = rotateAfter(actionOrder(players, gameState.button_seat), seatNumber).filter(
+        (s) => s !== seatNumber && !players.find((p) => p.seat_number === s)?.has_folded,
+      );
+      seatsActed = [];
+      break;
+    }
+    case "raise":
+    case "all_in": {
+      if (currentBet === 0 && actionType === "raise") {
+        return { updatedGameState: {}, updatedPlayers: [], handCompleted: false, error: "No bet to raise" };
+      }
+      const targetAmount = actionType === "all_in" ? (player.current_bet ?? 0) + player.chip_stack : amount ?? 0;
+      if (targetAmount <= currentBet) {
+        return { updatedGameState: {}, updatedPlayers: [], handCompleted: false, error: "Raise must exceed current bet" };
+      }
+      const raiseAmount = targetAmount - currentBet;
+      if (raiseAmount < minRaise && actionType !== "all_in") {
+        return { updatedGameState: {}, updatedPlayers: [], handCompleted: false, error: "Raise below minimum" };
+      }
+      invest(targetAmount - (player.current_bet ?? 0));
+      currentBet = targetAmount;
+      minRaise = raiseAmount;
+      seatsToAct = rotateAfter(actionOrder(players, gameState.button_seat), seatNumber).filter(
+        (s) => s !== seatNumber && !players.find((p) => p.seat_number === s)?.has_folded,
+      );
+      seatsActed = [];
+      break;
+    }
+    default:
+      return { updatedGameState: {}, updatedPlayers: [], handCompleted: false, error: "Unknown action" };
+  }
+
+  actionHistory.push({
+    seat_number: seatNumber,
+    action_type: actionType,
+    amount,
+    timestamp: new Date().toISOString(),
+  });
+
+  const activeSeats = activeNonFolded(players).map((p) => p.seat_number);
+
+  // If only one player remains, hand ends immediately
+  if (activeSeats.filter((s) => !players.find((p) => p.seat_number === s)?.is_all_in).length <= 1 || activeSeats.length === 1) {
+    return {
+      updatedGameState: {
+        phase: "complete",
+        current_actor_seat: null,
+        seats_to_act: [],
+        seats_acted: activeSeats,
+        action_history: actionHistory,
+        pot_size: pot,
+      },
+      updatedPlayers,
+      handCompleted: true,
+      autoWinners: activeSeats,
+      potAwarded: pot,
+    };
+  }
+
+  // Street completion: if no seats left to act and all bets are matched
+  const awaiting = seatsToAct.length;
+  const allBetsEqual = players.every(
+    (p) => p.has_folded || p.is_spectating || p.is_sitting_out || (p.current_bet ?? 0) === currentBet || p.is_all_in,
+  );
+
+  let currentActor: number | null = seatsToAct[0] ?? null;
+
+  if (awaiting === 0 && allBetsEqual) {
+    // advance phase
+    const nextPhase = advancePhase(phase);
+    phase = nextPhase;
+    seatsActed = [];
+    seatsToAct = [];
+    currentActor = null;
+
+    if (nextPhase !== "complete" && nextPhase !== "showdown") {
+      // reset bets for the new street
+      players.forEach((p) => {
+        updatedPlayers.push({
+          id: p.id,
+          room_id: p.room_id,
+          seat_number: p.seat_number,
+          auth_user_id: p.auth_user_id,
+          display_name: p.display_name,
+          total_buy_in: p.total_buy_in,
+          chip_stack: p.chip_stack,
+          current_bet: 0
+        });
+        p.current_bet = 0;
+      });
+      currentBet = 0;
+      const order = actionOrder(players, gameState.button_seat);
+      seatsToAct = order.filter((s) => {
+        const pl = players.find((p) => p.seat_number === s);
+        return pl && !pl.has_folded && !pl.is_all_in && !pl.is_sitting_out && !pl.is_spectating;
+      });
+      currentActor = seatsToAct[0] ?? null;
+    }
+
+    // Reveal next community cards based on phase progression
+    const updatedBoardState: {
+      board1?: string[];
+      board2?: string[];
+      fullBoard1?: string[];
+      fullBoard2?: string[];
+    } = { ...boardState };
+    if (nextPhase === "turn") {
+      updatedBoardState.board1 = fullBoard1.slice(0, 4);
+      updatedBoardState.board2 = fullBoard2.slice(0, 4);
+      updatedBoardState.fullBoard1 = fullBoard1;
+      updatedBoardState.fullBoard2 = fullBoard2;
+    } else if (nextPhase === "river") {
+      updatedBoardState.board1 = fullBoard1.slice(0, 5);
+      updatedBoardState.board2 = fullBoard2.slice(0, 5);
+      updatedBoardState.fullBoard1 = fullBoard1;
+      updatedBoardState.fullBoard2 = fullBoard2;
+    } else if (nextPhase === "showdown" || nextPhase === "complete") {
+      updatedBoardState.board1 = fullBoard1.slice(0, 5);
+      updatedBoardState.board2 = fullBoard2.slice(0, 5);
+      updatedBoardState.fullBoard1 = fullBoard1;
+      updatedBoardState.fullBoard2 = fullBoard2;
+    }
+
+    // When hand reaches showdown, determine winners
+    let autoWinners: number[] | undefined = undefined;
+    let potAwarded: number | undefined = undefined;
+
+    if (nextPhase === "showdown" || nextPhase === "complete") {
+      // For now: split pot equally among all non-folded players
+      // TODO: Implement proper PLO hand evaluation
+      const activePlayers = players.filter((p) => !p.has_folded);
+      autoWinners = activePlayers.map((p) => p.seat_number);
+      potAwarded = pot;
+    }
+
+    if (nextPhase === "showdown" || nextPhase === "complete") {
+      return {
+        updatedGameState: {
+          phase,
+          current_actor_seat: currentActor,
+          seats_to_act: seatsToAct,
+          seats_acted: seatsActed,
+          action_history: actionHistory,
+          current_bet: currentBet,
+          pot_size: pot,
+          board_state: updatedBoardState,
+        },
+        updatedPlayers,
+        handCompleted: true,
+        autoWinners,
+        potAwarded,
+      };
+    }
+
+    // Return for turn/river street advancement
+    return {
+      updatedGameState: {
+        phase,
+        pot_size: pot,
+        current_bet: currentBet,
+        min_raise: minRaise,
+        current_actor_seat: currentActor,
+        seats_to_act: seatsToAct,
+        seats_acted: seatsActed,
+        action_history: actionHistory,
+        last_aggressor_seat: gameState.last_aggressor_seat,
+        last_raise_amount: gameState.last_raise_amount,
+        board_state: updatedBoardState,
+      },
+      updatedPlayers,
+      handCompleted: false,
+    };
+  }
+
+  return {
+    updatedGameState: {
+      phase,
+      pot_size: pot,
+      current_bet: currentBet,
+      min_raise: minRaise,
+      current_actor_seat: currentActor,
+      seats_to_act: seatsToAct,
+      seats_acted: seatsActed,
+      action_history: actionHistory,
+      last_aggressor_seat: actionType === "bet" || actionType === "raise" || actionType === "all_in"
+        ? seatNumber
+        : gameState.last_aggressor_seat,
+      last_raise_amount: actionType === "bet" || actionType === "raise" || actionType === "all_in"
+        ? currentBet
+        : gameState.last_raise_amount,
+      board_state: { ...boardState },
+    },
+    updatedPlayers,
+    handCompleted: false,
+  };
+}
+
+export function advancePhase(current: GamePhase): GamePhase {
+  const order: GamePhase[] = ["flop", "turn", "river", "showdown", "complete"];
+  const idx = order.indexOf(current);
+  if (idx === -1 || idx === order.length - 1) return "complete";
+  return order[idx + 1];
+}
+
+/**
+ * Evaluate a single player's best hand for a given board (PLO rules)
+ */
+function evaluatePlayerHand(holeCards: string[], board: string[]): { strength: number; hand: string[] } {
+  try {
+    // Type assertion needed because evaluateOmaha expects specific card literal types
+    // but our cards come from the database as plain strings
+    const evaluated = evaluateOmaha({
+      holeCards: holeCards as unknown as Parameters<typeof evaluateOmaha>[0]['holeCards'],
+      communityCards: board as unknown as Parameters<typeof evaluateOmaha>[0]['communityCards'],
+    });
+    return {
+      strength: evaluated.strength,
+      hand: evaluated.hand,
+    };
+  } catch (err) {
+    // Fallback: return worst possible hand if evaluation fails
+    return { strength: 0, hand: [] };
+  }
+}
+
+/**
+ * Determine winners for double board PLO
+ * Each board awards half the pot. If a player wins both boards, they get the full pot.
+ *
+ * @returns Object with board1Winners and board2Winners arrays of seat numbers
+ */
+export function determineDoubleBoardWinners(
+  playerHands: Array<{ seatNumber: number; cards: string[] }>,
+  board1: string[],
+  board2: string[],
+): { board1Winners: number[]; board2Winners: number[] } {
+  if (playerHands.length === 0) {
+    return { board1Winners: [], board2Winners: [] };
+  }
+
+  // Evaluate each player on both boards
+  const evaluations = playerHands.map((ph) => ({
+    seatNumber: ph.seatNumber,
+    board1: evaluatePlayerHand(ph.cards, board1),
+    board2: evaluatePlayerHand(ph.cards, board2),
+  }));
+
+  // Find best hand(s) for board 1
+  const maxStrength1 = Math.max(...evaluations.map((e) => e.board1.strength));
+  const board1Winners = evaluations
+    .filter((e) => e.board1.strength === maxStrength1)
+    .map((e) => e.seatNumber);
+
+  // Find best hand(s) for board 2
+  const maxStrength2 = Math.max(...evaluations.map((e) => e.board2.strength));
+  const board2Winners = evaluations
+    .filter((e) => e.board2.strength === maxStrength2)
+    .map((e) => e.seatNumber);
+
+  return { board1Winners, board2Winners };
+}
+
+/**
+ * Calculate side pots from players with different all-in amounts
+ */
+export function calculateSidePots(
+  players: RoomPlayer[],
+): Array<{ amount: number; eligibleSeats: number[] }> {
+  const activePlayers = players.filter((p) => !p.has_folded && p.total_invested_this_hand > 0);
+
+  if (activePlayers.length === 0) {
+    return [];
+  }
+
+  // Sort by total investment
+  const sorted = [...activePlayers].sort(
+    (a, b) => a.total_invested_this_hand - b.total_invested_this_hand,
+  );
+
+  const pots: Array<{ amount: number; eligibleSeats: number[] }> = [];
+  let previousLevel = 0;
+
+  sorted.forEach((player, index) => {
+    const currentLevel = player.total_invested_this_hand;
+    const diff = currentLevel - previousLevel;
+
+    if (diff > 0) {
+      // All players still in the hand at this level contribute to this pot
+      const eligibleSeats = sorted.slice(index).map((p) => p.seat_number);
+      const potAmount = diff * eligibleSeats.length;
+
+      // Also add contributions from players who invested more (they're in subsequent sorted entries)
+      for (let i = 0; i < index; i++) {
+        // These players already contributed up to currentLevel
+      }
+
+      pots.push({
+        amount: potAmount,
+        eligibleSeats,
+      });
+    }
+
+    previousLevel = currentLevel;
+  });
+
+  return pots;
+}
+
+/**
+ * Distribute pot(s) to winners, handling side pots and double boards
+ * TODO: sidePots parameter will be used when side pot distribution is implemented
+ */
+export function endOfHandPayout(
+  board1Winners: number[],
+  board2Winners: number[],
+  pot: number,
+): { seat: number; amount: number }[] {
+  if (board1Winners.length === 0 && board2Winners.length === 0) return [];
+
+  const payouts: Map<number, number> = new Map();
+
+  // For now, ignore side pots and split the main pot between the two boards
+  // TODO: Implement proper side pot distribution
+
+  // Split pot in half for each board
+  // Use Math.floor for first board, but give remainder to second board to avoid losing chips
+  const halfPot = Math.floor(pot / 2);
+  const remainderPot = pot - halfPot; // This handles odd pots correctly
+
+  // Award board 1 half
+  const board1Share = Math.floor(halfPot / board1Winners.length);
+  board1Winners.forEach((seat) => {
+    payouts.set(seat, (payouts.get(seat) || 0) + board1Share);
+  });
+
+  // Award board 2 half (includes any odd chip)
+  const board2Share = Math.floor(remainderPot / board2Winners.length);
+  board2Winners.forEach((seat) => {
+    payouts.set(seat, (payouts.get(seat) || 0) + board2Share);
+  });
+
+  return Array.from(payouts.entries()).map(([seat, amount]) => ({ seat, amount }));
+}

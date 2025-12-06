@@ -7,33 +7,43 @@ export type Json =
   | Json[]
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
+      game_state_secrets: {
+        Row: {
+          created_at: string
+          deck_seed: string
+          full_board1: string[]
+          full_board2: string[]
+          game_state_id: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          deck_seed: string
+          full_board1: string[]
+          full_board2: string[]
+          game_state_id: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          deck_seed?: string
+          full_board1?: string[]
+          full_board2?: string[]
+          game_state_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_state_secrets_game_state_id_fkey"
+            columns: ["game_state_id"]
+            isOneToOne: true
+            referencedRelation: "game_states"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       game_states: {
         Row: {
           action_deadline_at: string | null
@@ -111,7 +121,7 @@ export type Database = {
           {
             foreignKeyName: "game_states_room_id_fkey"
             columns: ["room_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "rooms"
             referencedColumns: ["id"]
           },
@@ -168,6 +178,7 @@ export type Database = {
         Row: {
           action_type: Database["public"]["Enums"]["action_type"]
           amount: number | null
+          auth_user_id: string | null
           created_at: string
           error_message: string | null
           game_state_id: string | null
@@ -176,11 +187,11 @@ export type Database = {
           processed_at: string | null
           room_id: string
           seat_number: number
-          auth_user_id: string | null
         }
         Insert: {
           action_type: Database["public"]["Enums"]["action_type"]
           amount?: number | null
+          auth_user_id?: string | null
           created_at?: string
           error_message?: string | null
           game_state_id?: string | null
@@ -189,11 +200,11 @@ export type Database = {
           processed_at?: string | null
           room_id: string
           seat_number: number
-          auth_user_id?: string | null
         }
         Update: {
           action_type?: Database["public"]["Enums"]["action_type"]
           amount?: number | null
+          auth_user_id?: string | null
           created_at?: string
           error_message?: string | null
           game_state_id?: string | null
@@ -202,7 +213,6 @@ export type Database = {
           processed_at?: string | null
           room_id?: string
           seat_number?: number
-          auth_user_id?: string | null
         }
         Relationships: [
           {
@@ -223,24 +233,25 @@ export type Database = {
       }
       player_hands: {
         Row: {
+          auth_user_id: string | null
           cards: Json
           created_at: string
           game_state_id: string
           id: string
           room_id: string
           seat_number: number
-          auth_user_id: string | null
         }
         Insert: {
+          auth_user_id?: string | null
           cards: Json
           created_at?: string
           game_state_id: string
           id?: string
           room_id: string
           seat_number: number
-          auth_user_id?: string | null
         }
         Update: {
+          auth_user_id?: string | null
           cards?: Json
           created_at?: string
           game_state_id?: string
@@ -267,6 +278,7 @@ export type Database = {
       }
       room_players: {
         Row: {
+          auth_user_id: string | null
           chip_stack: number
           connected_at: string | null
           current_bet: number | null
@@ -279,11 +291,11 @@ export type Database = {
           last_action_at: string | null
           room_id: string
           seat_number: number
-          auth_user_id: string | null
           total_buy_in: number
           total_invested_this_hand: number | null
         }
         Insert: {
+          auth_user_id?: string | null
           chip_stack: number
           connected_at?: string | null
           current_bet?: number | null
@@ -296,11 +308,11 @@ export type Database = {
           last_action_at?: string | null
           room_id: string
           seat_number: number
-          auth_user_id?: string | null
           total_buy_in?: number
           total_invested_this_hand?: number | null
         }
         Update: {
+          auth_user_id?: string | null
           chip_stack?: number
           connected_at?: string | null
           current_bet?: number | null
@@ -332,11 +344,11 @@ export type Database = {
           bomb_pot_ante: number
           button_seat: number | null
           created_at: string
-          current_hand_number: number | null
+          current_hand_number: number
           game_mode: Database["public"]["Enums"]["game_mode"]
           id: string
           inter_hand_delay: number
-          is_active: boolean | null
+          is_active: boolean
           is_paused: boolean
           last_activity_at: string | null
           max_buy_in: number
@@ -349,14 +361,14 @@ export type Database = {
         }
         Insert: {
           big_blind: number
-          bomb_pot_ante: number
+          bomb_pot_ante?: number
           button_seat?: number | null
           created_at?: string
-          current_hand_number?: number | null
+          current_hand_number?: number
           game_mode?: Database["public"]["Enums"]["game_mode"]
           id?: string
           inter_hand_delay?: number
-          is_active?: boolean | null
+          is_active?: boolean
           is_paused?: boolean
           last_activity_at?: string | null
           max_buy_in: number
@@ -372,11 +384,11 @@ export type Database = {
           bomb_pot_ante?: number
           button_seat?: number | null
           created_at?: string
-          current_hand_number?: number | null
+          current_hand_number?: number
           game_mode?: Database["public"]["Enums"]["game_mode"]
           id?: string
           inter_hand_delay?: number
-          is_active?: boolean | null
+          is_active?: boolean
           is_paused?: boolean
           last_activity_at?: string | null
           max_buy_in?: number
@@ -532,9 +544,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       action_type: ["fold", "check", "call", "bet", "raise", "all_in"],
@@ -551,3 +560,4 @@ export const Constants = {
     },
   },
 } as const
+
