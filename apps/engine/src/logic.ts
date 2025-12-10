@@ -80,7 +80,7 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
     } as Partial<RoomPlayer>;
   });
 
-  const totalAnte = ante * activePlayers.length;
+  const totalAnte = updatedPlayers.reduce((sum, p) => sum + (p.total_invested_this_hand ?? 0), 0);
   const buttonSeat = nextButtonSeat(activePlayers, room.button_seat);
   const order = actionOrder(activePlayers, buttonSeat);
   const seatsToAct = order.filter((s) => !updatedPlayers.find((p) => p.seat_number === s)?.is_all_in);
@@ -136,9 +136,11 @@ function activeNonFolded(players: RoomPlayer[]): RoomPlayer[] {
 }
 
 function rotateAfter(seats: number[], current: number): number[] {
-  const greater = seats.filter((s) => s > current);
-  const lesser = seats.filter((s) => s !== current && s <= current);
-  return [...greater, ...lesser];
+  const idx = seats.indexOf(current);
+  if (idx === -1) return seats;
+  const after = seats.slice(idx + 1);
+  const before = seats.slice(0, idx);
+  return [...after, ...before];
 }
 
 export function applyAction(
@@ -259,8 +261,16 @@ export function applyAction(
         return { updatedGameState: {}, updatedPlayers: [], handCompleted: false, error: "No bet to raise" };
       }
       const targetAmount = actionType === "all_in" ? (player.current_bet ?? 0) + player.chip_stack : amount ?? 0;
-      if (targetAmount <= currentBet) {
+      // Short-stack all-ins are allowed to call for less; only enforce raise rules when the all-in exceeds the current bet.
+      const isAllInRaise = actionType === "all_in" && targetAmount > currentBet;
+      if (actionType !== "all_in" && targetAmount <= currentBet) {
         return { updatedGameState: {}, updatedPlayers: [], handCompleted: false, error: "Raise must exceed current bet" };
+      }
+      if (actionType === "all_in" && !isAllInRaise) {
+        // Treat as a call for less; keep table currentBet/minRaise unchanged.
+        invest(targetAmount - (player.current_bet ?? 0));
+        markActed();
+        break;
       }
       const raiseAmount = targetAmount - currentBet;
       if (raiseAmount < minRaise && actionType !== "all_in") {
@@ -288,8 +298,15 @@ export function applyAction(
 
   const activeSeats = activeNonFolded(players).map((p) => p.seat_number);
 
-  // If only one player remains, hand ends immediately
-  if (activeSeats.filter((s) => !players.find((p) => p.seat_number === s)?.is_all_in).length <= 1 || activeSeats.length === 1) {
+  // If only one player remains (everyone else folded), hand ends immediately
+  if (activeSeats.length === 1) {
+    // Calculate side pots with updated player state
+    const mergedPlayers = players.map((p) => {
+      const updated = updatedPlayers.find((u) => u.id === p.id);
+      return updated ? { ...p, ...updated } : p;
+    });
+    const calculatedSidePots = calculateSidePots(mergedPlayers as RoomPlayer[]);
+
     return {
       updatedGameState: {
         phase: "complete",
@@ -298,6 +315,7 @@ export function applyAction(
         seats_acted: activeSeats,
         action_history: actionHistory,
         pot_size: pot,
+        side_pots: calculatedSidePots,
       },
       updatedPlayers,
       handCompleted: true,
@@ -315,6 +333,48 @@ export function applyAction(
   let currentActor: number | null = seatsToAct[0] ?? null;
 
   if (awaiting === 0 && allBetsEqual) {
+    const activeNonFoldedPlayers = players.filter((p) => !p.has_folded && !p.is_spectating && !p.is_sitting_out);
+    const nonAllInCount = activeNonFoldedPlayers.filter((p) => !p.is_all_in).length;
+    const contributionLevels = new Set(
+      activeNonFoldedPlayers.map((p) =>
+        Math.max(p.total_invested_this_hand ?? 0, p.current_bet ?? 0),
+      ),
+    );
+
+    // Debug aid for street-closing logic; keep disabled in production
+    // console.log('street-closure', { nonAllInCount, contributionLevels: Array.from(contributionLevels), awaiting, allBetsEqual });
+
+    // If everyone has matched contributions and there is no one left who can raise (only one non-all-in),
+    // fast-forward to showdown/complete.
+    if (nonAllInCount <= 1 && contributionLevels.size === 1) {
+      const updatedBoardState = {
+        board1: fullBoard1.slice(0, 5),
+        board2: fullBoard2.slice(0, 5),
+        fullBoard1: fullBoard1,
+        fullBoard2: fullBoard2,
+      };
+
+      const calculatedSidePotsFinal = calculateSidePots(activeNonFoldedPlayers as RoomPlayer[]);
+
+      return {
+        updatedGameState: {
+          phase: "complete",
+          current_actor_seat: null,
+          seats_to_act: [],
+          seats_acted: activeSeats,
+          action_history: [...actionHistory],
+          current_bet: currentBet,
+          pot_size: pot,
+          board_state: updatedBoardState,
+          side_pots: calculatedSidePotsFinal,
+        },
+        updatedPlayers,
+        handCompleted: true,
+        autoWinners: activeSeats,
+        potAwarded: pot,
+      };
+    }
+
     // advance phase
     const nextPhase = advancePhase(phase);
     phase = nextPhase;
@@ -338,6 +398,7 @@ export function applyAction(
         p.current_bet = 0;
       });
       currentBet = 0;
+      minRaise = room.big_blind;
       const order = actionOrder(players, gameState.button_seat);
       seatsToAct = order.filter((s) => {
         const pl = players.find((p) => p.seat_number === s);
@@ -383,6 +444,13 @@ export function applyAction(
     }
 
     if (nextPhase === "showdown" || nextPhase === "complete") {
+      // Calculate side pots with updated player state
+      const mergedPlayers = players.map((p) => {
+        const updated = updatedPlayers.find((u) => u.id === p.id);
+        return updated ? { ...p, ...updated } : p;
+      });
+      const calculatedSidePots = calculateSidePots(mergedPlayers as RoomPlayer[]);
+
       return {
         updatedGameState: {
           phase,
@@ -393,6 +461,7 @@ export function applyAction(
           current_bet: currentBet,
           pot_size: pot,
           board_state: updatedBoardState,
+          side_pots: calculatedSidePots,
         },
         updatedPlayers,
         handCompleted: true,
@@ -402,6 +471,13 @@ export function applyAction(
     }
 
     // Return for turn/river street advancement
+    // Calculate side pots with updated player state
+    const mergedPlayers = players.map((p) => {
+      const updated = updatedPlayers.find((u) => u.id === p.id);
+      return updated ? { ...p, ...updated } : p;
+    });
+    const calculatedSidePots = calculateSidePots(mergedPlayers as RoomPlayer[]);
+
     return {
       updatedGameState: {
         phase,
@@ -415,11 +491,19 @@ export function applyAction(
         last_aggressor_seat: gameState.last_aggressor_seat,
         last_raise_amount: gameState.last_raise_amount,
         board_state: updatedBoardState,
+        side_pots: calculatedSidePots,
       },
       updatedPlayers,
       handCompleted: false,
     };
   }
+
+  // Calculate side pots after action is applied
+  const mergedPlayers = players.map((p) => {
+    const updated = updatedPlayers.find((u) => u.id === p.id);
+    return updated ? { ...p, ...updated } : p;
+  });
+  const calculatedSidePots = calculateSidePots(mergedPlayers as RoomPlayer[]);
 
   return {
     updatedGameState: {
@@ -438,6 +522,7 @@ export function applyAction(
         ? currentBet
         : gameState.last_raise_amount,
       board_state: { ...boardState },
+      side_pots: calculatedSidePots,
     },
     updatedPlayers,
     handCompleted: false,
@@ -537,7 +622,8 @@ export function calculateSidePots(players: RoomPlayer[]): Array<{ amount: number
   uniqueLevels.forEach((level) => {
     const eligibleSeats = sorted
       .filter((p) => (p.total_invested_this_hand ?? 0) >= level)
-      .map((p) => p.seat_number);
+      .map((p) => p.seat_number)
+      .sort((a, b) => a - b);
     const diff = level - previousLevel;
     if (diff > 0 && eligibleSeats.length > 0) {
       pots.push({

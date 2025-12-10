@@ -5,7 +5,7 @@ import { port, corsOrigin } from "./env.js";
 import { logger } from "./logger.js";
 import { supabase } from "./supabase.js";
 import { dealHand, applyAction, endOfHandPayout, determineDoubleBoardWinners, calculateSidePots } from "./logic.js";
-import type { GameStateRow, Room, RoomPlayer } from "./types.js";
+import type { GameStateRow, Room, RoomPlayer, SidePot } from "./types.js";
 import { ActionType } from "@poker/shared";
 import { fetchGameStateSecret } from "./secrets.js";
 
@@ -444,7 +444,8 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
           board2,
         );
 
-        const sidePots = calculateSidePots(mergedPlayers);
+        // Reuse side pots from applyAction outcome instead of recalculating
+        const sidePots = outcome.updatedGameState.side_pots as SidePot[] ?? calculateSidePots(mergedPlayers);
         payouts = endOfHandPayout(sidePots, board1Winners, board2Winners);
       }
 

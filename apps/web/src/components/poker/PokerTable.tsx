@@ -13,6 +13,7 @@ interface PokerTableProps {
   boardA?: string[];
   boardB?: string[];
   potSize?: number;
+  sidePots?: Array<{ amount: number; eligibleSeats: number[] }>;
   phase?: string;
   onSeatClick: (seatNumber: number) => void;
 }
@@ -27,6 +28,7 @@ export function PokerTable({
   boardA = [],
   boardB = [],
   potSize = 0,
+  sidePots = [],
   phase,
   onSeatClick,
 }: PokerTableProps) {
@@ -346,15 +348,39 @@ export function PokerTable({
       {/* Center - Community Cards and Pot */}
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
         {/* Pot Display (left on desktop, below on mobile) */}
-        <div className="order-2 sm:order-1 glass rounded-lg px-3 sm:px-4 py-1 sm:py-1.5 border border-whiskey-gold/30 shadow-lg">
-          <div className="text-center">
-            <div
-              className="text-base sm:text-xl font-bold text-whiskey-gold glow-gold"
-              style={{ fontFamily: "Roboto Mono, monospace" }}
-            >
-              ${potSize}
+        <div className="order-2 sm:order-1 flex flex-col gap-2">
+          {/* Main pot */}
+          <div className="glass rounded-lg px-3 sm:px-4 py-1 sm:py-1.5 border border-whiskey-gold/30 shadow-lg">
+            <div className="text-center">
+              <div
+                className="text-base sm:text-xl font-bold text-whiskey-gold glow-gold"
+                style={{ fontFamily: "Roboto Mono, monospace" }}
+              >
+                ${potSize}
+              </div>
+              {sidePots && sidePots.length > 1 && (
+                <div className="text-xs text-cigar-ash mt-0.5">Main Pot</div>
+              )}
             </div>
           </div>
+
+          {/* Side pots */}
+          {sidePots && sidePots.length > 1 && sidePots.slice(1).map((sidePot, idx) => (
+            <div
+              key={idx}
+              className="glass rounded-lg px-3 sm:px-4 py-1 sm:py-1.5 border border-whiskey-gold/20 shadow-lg"
+            >
+              <div className="text-center">
+                <div
+                  className="text-sm sm:text-base font-bold text-whiskey-gold/80"
+                  style={{ fontFamily: "Roboto Mono, monospace" }}
+                >
+                  ${sidePot.amount}
+                </div>
+                <div className="text-xs text-cigar-ash">Side Pot {idx + 1}</div>
+              </div>
+            </div>
+          ))}
         </div>
 
         {/* Community Cards */}

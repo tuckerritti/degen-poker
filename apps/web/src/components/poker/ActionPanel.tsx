@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getBettingLimits } from "@/lib/poker/betting";
 
 interface ActionPanelProps {
@@ -24,9 +24,7 @@ export function ActionPanel({
   onAction,
   disabled = false,
 }: ActionPanelProps) {
-  const [betAmount, setBetAmount] = useState(0);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
+  // Slider reflects *additional* chips the player will put in (not total committed)
   const limits = getBettingLimits(
     playerChips,
     playerCurrentBet,
@@ -35,6 +33,29 @@ export function ActionPanel({
     lastRaiseAmount,
     bigBlind,
   );
+
+  const extraMin = useMemo(
+    () => Math.max(limits.minBet - playerCurrentBet, 0),
+    [limits.minBet, playerCurrentBet],
+  );
+  const extraMax = useMemo(
+    () => Math.max(limits.maxBet - playerCurrentBet, 0),
+    [limits.maxBet, playerCurrentBet],
+  );
+
+  const [extraAmount, setExtraAmount] = useState(extraMin);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Keep slider value within new bounds when state updates (e.g., after a bet)
+  useEffect(() => {
+    setExtraAmount((prev) => {
+      if (prev < extraMin) return extraMin;
+      if (prev > extraMax) return extraMax;
+      return prev;
+    });
+  }, [extraMin, extraMax]);
+
+  const targetTotalBet = extraAmount + playerCurrentBet;
 
   const handleAction = async (actionType: string, amount?: number) => {
     setIsSubmitting(true);
@@ -53,10 +74,10 @@ export function ActionPanel({
 
     // Calculate fractional bet between min and pot-sized
     const range = potSizedBet - minBet;
-    const quickBet = Math.floor(minBet + range * multiplier);
-
-    const capped = Math.min(Math.max(quickBet, limits.minBet), limits.maxBet);
-    setBetAmount(capped);
+    const quickTotalBet = Math.floor(minBet + range * multiplier);
+    const quickExtra = Math.max(quickTotalBet - playerCurrentBet, 0);
+    const cappedExtra = Math.min(Math.max(quickExtra, extraMin), extraMax);
+    setExtraAmount(cappedExtra);
   };
 
   return (
@@ -111,13 +132,17 @@ export function ActionPanel({
                 {/* Slider */}
                 <input
                   type="range"
-                  min={limits.minBet}
-                  max={limits.maxBet}
-                  value={betAmount}
-                  onChange={(e) => setBetAmount(Number(e.target.value))}
+                  min={extraMin}
+                  max={extraMax}
+                  value={extraAmount}
+                  onChange={(e) => setExtraAmount(Number(e.target.value))}
                   className="w-full accent-whiskey-gold h-8"
                   disabled={disabled || isSubmitting}
                 />
+                <div className="text-xs text-cream-parchment/80 flex justify-between">
+                  <span>Adding ${extraAmount}</span>
+                  <span>Total after raise: ${targetTotalBet}</span>
+                </div>
 
                 {/* Quick bet buttons */}
                 <div className="flex gap-2">
@@ -143,10 +168,8 @@ export function ActionPanel({
                     Pot
                   </button>
                   <button
-                    onClick={() => setBetAmount(playerChips)}
-                    disabled={
-                      disabled || isSubmitting || playerChips > limits.maxBet
-                    }
+                    onClick={() => setExtraAmount(extraMax)}
+                    disabled={disabled || isSubmitting || playerChips > limits.maxBet}
                     className="flex-1 rounded bg-mahogany border border-white/10 px-2 py-2 text-xs sm:text-xs text-cream-parchment hover:border-whiskey-gold/50 disabled:opacity-50 transition-colors"
                   >
                     All-In
@@ -157,13 +180,16 @@ export function ActionPanel({
               {/* Bet/Raise Button */}
               <button
                 onClick={() =>
-                  handleAction(currentBet === 0 ? "bet" : "raise", betAmount)
+                  handleAction(
+                    currentBet === 0 ? "bet" : "raise",
+                    targetTotalBet,
+                  )
                 }
                 disabled={
                   disabled ||
                   isSubmitting ||
-                  betAmount < limits.minBet ||
-                  betAmount > limits.maxBet
+                  targetTotalBet < limits.minBet ||
+                  targetTotalBet > limits.maxBet
                 }
                 className="rounded-lg bg-whiskey-gold border border-whiskey-gold px-8 sm:px-12 py-3 font-bold text-tokyo-night shadow-lg transition-all hover:bg-whiskey-gold/90 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 touch-target"
               >
@@ -174,7 +200,7 @@ export function ActionPanel({
                   className="text-lg"
                   style={{ fontFamily: "Roboto Mono, monospace" }}
                 >
-                  ${betAmount}
+                  ${targetTotalBet}
                 </div>
               </button>
             </div>

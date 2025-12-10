@@ -37,6 +37,11 @@ export interface RoomPlayer {
   last_action_at: string | null;
 }
 
+export interface SidePot {
+  amount: number;
+  eligibleSeats: number[];
+}
+
 export interface GameStateRow {
   id: string;
   room_id: string;
@@ -59,7 +64,7 @@ export interface GameStateRow {
     board1?: string[];
     board2?: string[];
   } | null;
-  side_pots: unknown;
+  side_pots: SidePot[] | null;
   action_history: unknown;
   created_at: string;
   updated_at: string;

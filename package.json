@@ -11,6 +11,7 @@
     "dev": "turbo dev --parallel --filter=engine --filter=web",
     "build": "turbo build",
     "lint": "turbo lint",
+    "test": "turbo test",
     "update-types": "cd supabase && supabase gen types typescript --local --schema public > ../apps/web/src/types/database.types.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

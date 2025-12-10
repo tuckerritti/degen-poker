@@ -7,7 +7,11 @@
     "dev": "NODE_ENV=development ENGINE_PORT=3001 tsx watch src/index.ts",
     "start": "node dist/index.js",
     "build": "tsc --noEmit",
-    "lint": "ESLINT_USE_FLAT_CONFIG=false eslint . --ext .ts && tsc --noEmit"
+    "lint": "ESLINT_USE_FLAT_CONFIG=false eslint . --ext .ts && tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:unit": "vitest run tests/unit"
   },
   "dependencies": {
     "@poker-apprentice/hand-evaluator": "^3.0.0",
@@ -26,9 +30,11 @@
     "@types/seedrandom": "^2.4.34",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
+    "@vitest/coverage-v8": "^2.1.9",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
     "tsx": "^4.19.2",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.9"
   }
 }

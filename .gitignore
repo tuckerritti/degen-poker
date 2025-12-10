@@ -121,3 +121,8 @@ Icon
 Network Trash Folder
 Temporary Items
 .apdisk
+
+# Supabase
+supabase/.branches/
+supabase/.temp/
+

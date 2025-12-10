@@ -317,6 +317,11 @@ export default function RoomPage({
     });
   }
 
+  // Extract side pots from game state
+  const sidePots = gameState?.side_pots
+    ? (gameState.side_pots as unknown as Array<{ amount: number; eligibleSeats: number[] }>)
+    : [];
+
   const seatedPlayers = players.filter((p) => !p.is_spectating).length;
   const isOwner =
     room.owner_auth_user_id !== null
@@ -443,6 +448,7 @@ export default function RoomPage({
             boardA={boardA}
             boardB={boardB}
             potSize={gameState?.pot_size ?? 0}
+            sidePots={sidePots}
             phase={gameState?.phase}
             onSeatClick={handleSeatClick}
           />
