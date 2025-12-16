@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/hooks/useSession";
 
@@ -53,10 +53,19 @@ export default function Home() {
   const [isCreating, setIsCreating] = useState(false);
 
   // Create room form state
-  const [smallBlind, setSmallBlind] = useState(5);
-  const [bigBlind, setBigBlind] = useState(10);
+  const [bombPotAnte, setBombPotAnte] = useState(20);
   const [minBuyIn, setMinBuyIn] = useState(200);
   const [maxBuyIn, setMaxBuyIn] = useState(1000);
+
+  useEffect(() => {
+    const recommendedMin = Math.max(1, bombPotAnte * 10);
+    if (minBuyIn < recommendedMin) {
+      setMinBuyIn(recommendedMin);
+    }
+    if (maxBuyIn <= recommendedMin) {
+      setMaxBuyIn(recommendedMin + 1);
+    }
+  }, [bombPotAnte, minBuyIn, maxBuyIn]);
 
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,12 +90,9 @@ export default function Home() {
           ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify({
-          smallBlind,
-          bigBlind,
           minBuyIn,
           maxBuyIn,
-          bombPotAnte: bigBlind * 2, // Bomb pot ante = 2x big blind
-          ownerAuthUserId: sessionId,
+          bombPotAnte,
         }),
         },
       );
@@ -156,40 +162,29 @@ export default function Home() {
           </div>
 
           <form onSubmit={handleCreateRoom} className="space-y-3 sm:space-y-4">
-            <div className="grid grid-cols-2 gap-3 sm:gap-4">
+            <div className="grid grid-cols-1 gap-3 sm:gap-4">
               <div>
                 <label
                   className="block text-sm font-medium text-cigar-ash"
                   style={{ fontFamily: "Lato, sans-serif" }}
                 >
-                  Small Blind
+                  Bomb Pot Ante
                 </label>
                 <input
                   type="number"
-                  value={smallBlind}
-                  onChange={(e) => setSmallBlind(Number(e.target.value))}
+                  value={bombPotAnte}
+                  onChange={(e) => setBombPotAnte(Number(e.target.value))}
                   className="mt-1 block w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-cream-parchment shadow-sm focus:border-whiskey-gold focus:outline-none focus:ring-1 focus:ring-whiskey-gold backdrop-blur-sm"
                   style={{ fontFamily: "Roboto Mono, monospace" }}
-                  min="1"
+                  min={1}
                   required
                 />
-              </div>
-              <div>
-                <label
-                  className="block text-sm font-medium text-cigar-ash"
+                <p
+                  className="mt-1 text-xs text-cigar-ash"
                   style={{ fontFamily: "Lato, sans-serif" }}
                 >
-                  Big Blind
-                </label>
-                <input
-                  type="number"
-                  value={bigBlind}
-                  onChange={(e) => setBigBlind(Number(e.target.value))}
-                  className="mt-1 block w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-cream-parchment shadow-sm focus:border-whiskey-gold focus:outline-none focus:ring-1 focus:ring-whiskey-gold backdrop-blur-sm"
-                  style={{ fontFamily: "Roboto Mono, monospace" }}
-                  min={smallBlind + 1}
-                  required
-                />
+                  Every player antes this amount; there are no blinds in bomb pots.
+                </p>
               </div>
             </div>
 
@@ -207,7 +202,7 @@ export default function Home() {
                   onChange={(e) => setMinBuyIn(Number(e.target.value))}
                   className="mt-1 block w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-cream-parchment shadow-sm focus:border-whiskey-gold focus:outline-none focus:ring-1 focus:ring-whiskey-gold backdrop-blur-sm"
                   style={{ fontFamily: "Roboto Mono, monospace" }}
-                  min={bigBlind * 20}
+                  min={bombPotAnte * 10}
                   required
                 />
               </div>

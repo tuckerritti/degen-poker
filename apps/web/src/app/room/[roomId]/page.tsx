@@ -322,6 +322,8 @@ export default function RoomPage({
     ? (gameState.side_pots as unknown as Array<{ amount: number; eligibleSeats: number[] }>)
     : [];
 
+  const stakeUnit = room ? room.bomb_pot_ante ?? room.big_blind : 0;
+
   const seatedPlayers = players.filter((p) => !p.is_spectating).length;
   const isOwner =
     room.owner_auth_user_id !== null
@@ -359,8 +361,7 @@ export default function RoomPage({
               className="text-xs text-cigar-ash"
               style={{ fontFamily: "Roboto Mono, monospace" }}
             >
-              Blinds: {room.small_blind}/{room.big_blind} • Ante:{" "}
-              {room.bomb_pot_ante}
+              Ante: {room.bomb_pot_ante}
             </p>
             {isOwner && (
               <p
@@ -522,8 +523,8 @@ export default function RoomPage({
             playerCurrentBet={myPlayer.current_bet ?? 0}
             currentBet={gameState.current_bet ?? 0}
             potSize={gameState.pot_size ?? 0}
-            bigBlind={room.big_blind}
-            lastRaiseAmount={gameState.min_raise ?? room.big_blind}
+            bigBlind={stakeUnit}
+            lastRaiseAmount={gameState.min_raise ?? stakeUnit}
             onAction={handleAction}
           />
         </div>

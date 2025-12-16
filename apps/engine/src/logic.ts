@@ -62,6 +62,7 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
 
   // antes
   const ante = room.bomb_pot_ante ?? 0;
+  const baseBet = ante > 0 ? ante : room.big_blind;
   const updatedPlayers: Partial<RoomPlayer>[] = activePlayers.map((p) => {
     const antePaid = Math.min(p.chip_stack, ante);
     const remaining = p.chip_stack - antePaid;
@@ -94,7 +95,7 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
     phase: "flop",
     pot_size: totalAnte,
     current_bet: ante > 0 ? ante : 0,
-    min_raise: room.big_blind,
+    min_raise: baseBet,
     current_actor_seat: currentActor,
     last_aggressor_seat: null,
     last_raise_amount: null,
@@ -166,7 +167,8 @@ export function applyAction(
 
   let pot = gameState.pot_size ?? 0;
   let currentBet = gameState.current_bet ?? 0;
-  let minRaise = gameState.min_raise ?? room.big_blind;
+  const baseBet = Math.max(room.bomb_pot_ante ?? 0, room.big_blind);
+  let minRaise = gameState.min_raise ?? baseBet;
   const updatedPlayers: Partial<RoomPlayer>[] = [];
   let seatsToAct = [...(gameState.seats_to_act ?? [])];
   let seatsActed = [...(gameState.seats_acted ?? [])];
@@ -551,7 +553,7 @@ function evaluatePlayerHand(holeCards: string[], board: string[]): { strength: n
       strength: evaluated.strength,
       hand: evaluated.hand,
     };
-  } catch (err) {
+  } catch {
     // Fallback: return worst possible hand if evaluation fails
     return { strength: 0, hand: [] };
   }

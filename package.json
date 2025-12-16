@@ -2,7 +2,7 @@
   "name": "poker-app",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "npm@10.1.0",
+  "packageManager": "npm@11.7.0",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -17,8 +17,8 @@
     "format:check": "prettier --check ."
   },
   "devDependencies": {
-    "prettier": "^3.7.3",
-    "turbo": "^2.2.3",
-    "typescript": "^5.6.3"
+    "prettier": "^3.7.4",
+    "turbo": "^2.6.3",
+    "typescript": "^5.9.3"
   }
 }

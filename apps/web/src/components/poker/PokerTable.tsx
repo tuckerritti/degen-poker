@@ -59,30 +59,6 @@ export function PokerTable({
   // Check if current user already has a seat
   const userHasSeat = seatedPlayers.some((p) => p.id === myPlayerId);
 
-  // Helper function to find next occupied seat clockwise from a position
-  const findNextOccupiedSeat = (startSeat: number): number | null => {
-    if (seatedPlayers.length === 0) return null;
-
-    for (let i = 1; i <= maxPlayers; i++) {
-      const nextSeat = (startSeat + i) % maxPlayers;
-      if (occupiedSeats.has(nextSeat)) {
-        return nextSeat;
-      }
-    }
-    return null;
-  };
-
-  // Calculate small blind and big blind positions (next occupied seats clockwise)
-  let smallBlindSeat: number | null = null;
-  let bigBlindSeat: number | null = null;
-
-  if (buttonSeat !== null && buttonSeat !== undefined) {
-    smallBlindSeat = findNextOccupiedSeat(buttonSeat);
-    if (smallBlindSeat !== null) {
-      bigBlindSeat = findNextOccupiedSeat(smallBlindSeat);
-    }
-  }
-
   // Calculate seat positions on a flattened "stadium" path so ends feel rounded
   const getSeatPosition = (seatNumber: number) => {
     const angle = (seatNumber / maxPlayers) * 2 * Math.PI - Math.PI / 2;
@@ -174,8 +150,6 @@ export function PokerTable({
         const isCurrentActor = currentActorSeat === seatNumber;
         const isEmpty = !player;
         const hasButton = buttonSeat === seatNumber;
-        const isSmallBlind = smallBlindSeat === seatNumber;
-        const isBigBlind = bigBlindSeat === seatNumber;
 
         return (
           <button
@@ -265,30 +239,6 @@ export function PokerTable({
                   style={{ fontFamily: "Cinzel, serif" }}
                 >
                   D
-                </span>
-              </div>
-            )}
-
-            {/* Small Blind indicator */}
-            {isSmallBlind && !hasButton && (
-              <div className="absolute -left-2 -top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-royal-blue border-2 border-whiskey-gold shadow-lg">
-                <span
-                  className="text-xs font-bold text-whiskey-gold"
-                  style={{ fontFamily: "Lato, sans-serif" }}
-                >
-                  SB
-                </span>
-              </div>
-            )}
-
-            {/* Big Blind indicator */}
-            {isBigBlind && !hasButton && (
-              <div className="absolute -left-2 -top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-royal-blue border-2 border-whiskey-gold shadow-lg">
-                <span
-                  className="text-xs font-bold text-whiskey-gold"
-                  style={{ fontFamily: "Lato, sans-serif" }}
-                >
-                  BB
                 </span>
               </div>
             )}
