@@ -14,6 +14,7 @@ export type ActionType = (typeof ACTION_TYPES)[number];
 export const GAME_PHASES = [
   "waiting",
   "dealing",
+  "preflop",
   "flop",
   "turn",
   "river",
@@ -22,7 +23,7 @@ export const GAME_PHASES = [
 ] as const;
 export type GamePhase = (typeof GAME_PHASES)[number];
 
-export const GAME_MODES = ["double_board_bomb_pot_plo"] as const;
+export const GAME_MODES = ["double_board_bomb_pot_plo", "texas_holdem"] as const;
 export type GameMode = (typeof GAME_MODES)[number];
 
 export interface CreateRoomPayload {

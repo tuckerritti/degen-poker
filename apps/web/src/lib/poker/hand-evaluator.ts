@@ -294,6 +294,138 @@ export function evaluatePLOHand(
 }
 
 /**
+ * Evaluates Hold'em hand with partial board (flop or turn)
+ * Best 5 cards from 2 hole + available community cards
+ *
+ * @param holeCards - Player's 2 hole cards
+ * @param boardCards - 3, 4, or 5 community cards
+ * @returns Hand evaluation based on available cards
+ */
+export function evaluateHoldemHandPartial(
+  holeCards: string[],
+  boardCards: string[],
+): HandEvaluation {
+  if (boardCards.length < 3 || boardCards.length > 5) {
+    evalLogger.error(
+      { boardCardsCount: boardCards.length },
+      "Invalid board - must have 3-5 cards",
+    );
+    return { rank: -1, description: "Invalid board", hand: [] };
+  }
+
+  if (holeCards.length !== 2) {
+    evalLogger.error(
+      { holeCardsCount: holeCards.length },
+      "Invalid Hold'em hand - must have 2 hole cards",
+    );
+    return { rank: Infinity, description: "Invalid hand", hand: [] };
+  }
+
+  try {
+    // Combine hole cards and board cards
+    const allCards = [...holeCards, ...boardCards];
+
+    // Type assertion needed because hand-evaluator expects specific card type union
+    const result = evaluate({
+      holeCards: allCards as unknown as Parameters<typeof evaluate>[0]["holeCards"],
+    });
+
+    const description = getDetailedDescription(result.strength, result.hand as unknown as string[]);
+
+    evalLogger.debug(
+      {
+        holeCards,
+        boardCards,
+        rank: result.strength,
+        description,
+        hand: result.hand,
+      },
+      "Hold'em partial hand evaluated",
+    );
+
+    return {
+      rank: result.strength,
+      description,
+      hand: result.hand as unknown as string[],
+    };
+  } catch (error) {
+    evalLogger.error(
+      {
+        holeCards,
+        boardCards,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      "Hold'em hand evaluation failed",
+    );
+    return { rank: -1, description: "Evaluation error", hand: [] };
+  }
+}
+
+/**
+ * Evaluates Hold'em hand using best 5 cards from 2 hole + 5 board
+ * Returns best possible 5-card hand
+ */
+export function evaluateHoldemHand(
+  holeCards: string[], // 2 cards
+  boardCards: string[], // 5 cards
+): HandEvaluation {
+  if (holeCards.length !== 2) {
+    evalLogger.error(
+      { holeCardsCount: holeCards.length },
+      "Invalid Hold'em hand - must have 2 hole cards",
+    );
+    return { rank: Infinity, description: "Invalid hand", hand: [] };
+  }
+
+  if (boardCards.length !== 5) {
+    evalLogger.error(
+      { boardCardsCount: boardCards.length },
+      "Invalid board - must have 5 cards",
+    );
+    return { rank: Infinity, description: "Invalid board", hand: [] };
+  }
+
+  try {
+    // Combine hole cards and board cards
+    const allCards = [...holeCards, ...boardCards];
+
+    // Type assertion needed because hand-evaluator expects specific card type union
+    const result = evaluate({
+      holeCards: allCards as unknown as Parameters<typeof evaluate>[0]["holeCards"],
+    });
+
+    const description = getDetailedDescription(result.strength, result.hand as unknown as string[]);
+
+    evalLogger.debug(
+      {
+        holeCards,
+        boardCards,
+        rank: result.strength,
+        description,
+        hand: result.hand,
+      },
+      "Hold'em hand evaluated",
+    );
+
+    return {
+      rank: result.strength,
+      description,
+      hand: result.hand as unknown as string[],
+    };
+  } catch (error) {
+    evalLogger.error(
+      {
+        holeCards,
+        boardCards,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      "Hold'em hand evaluation failed",
+    );
+    return { rank: -1, description: "Evaluation error", hand: [] };
+  }
+}
+
+/**
  * Finds winner(s) for a single board
  * Returns all players with the best hand rank (handles ties)
  */

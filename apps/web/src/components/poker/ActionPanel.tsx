@@ -10,6 +10,7 @@ interface ActionPanelProps {
   potSize: number;
   bigBlind: number;
   lastRaiseAmount?: number;
+  gameMode?: string;
   onAction: (actionType: string, amount?: number) => void;
   disabled?: boolean;
 }
@@ -21,9 +22,13 @@ export function ActionPanel({
   potSize,
   bigBlind,
   lastRaiseAmount = 0,
+  gameMode = "double_board_bomb_pot_plo",
   onAction,
   disabled = false,
 }: ActionPanelProps) {
+  // Determine if this is a pot-limit game (PLO) or no-limit game (Hold'em)
+  const isPotLimit = gameMode === "double_board_bomb_pot_plo";
+
   // Slider reflects *additional* chips the player will put in (not total committed)
   const limits = getBettingLimits(
     playerChips,
@@ -32,6 +37,7 @@ export function ActionPanel({
     potSize,
     lastRaiseAmount,
     bigBlind,
+    isPotLimit,
   );
 
   const extraMin = useMemo(
@@ -67,17 +73,34 @@ export function ActionPanel({
   };
 
   const handleQuickBet = (multiplier: number) => {
-    // In PLO, pot-sized bet = call + pot after call
-    // limits.maxBet already uses the correct formula
-    const potSizedBet = limits.maxBet;
-    const minBet = limits.minBet;
+    const toCall = Math.max(currentBet - playerCurrentBet, 0);
 
-    // Calculate fractional bet between min and pot-sized
-    const range = potSizedBet - minBet;
-    const quickTotalBet = Math.floor(minBet + range * multiplier);
-    const quickExtra = Math.max(quickTotalBet - playerCurrentBet, 0);
-    const cappedExtra = Math.min(Math.max(quickExtra, extraMin), extraMax);
-    setExtraAmount(cappedExtra);
+    if (isPotLimit) {
+      // Pot-limit: limits.maxBet already equals pot-size (call + pot after call)
+      const potSizedBet = limits.maxBet;
+      const minBet = limits.minBet;
+      const range = potSizedBet - minBet;
+      const quickTotalBet = Math.floor(minBet + range * multiplier);
+      const quickExtra = Math.max(quickTotalBet - playerCurrentBet, 0);
+      const cappedExtra = Math.min(Math.max(quickExtra, extraMin), extraMax);
+      setExtraAmount(cappedExtra);
+      return;
+    }
+
+    // No-limit: quick buttons based on pot math (call first, then % of pot after call)
+    const potAfterCall = potSize + toCall;
+    const desiredTotal = Math.floor(
+      playerCurrentBet + toCall + potAfterCall * multiplier,
+    );
+    const clampedTotal = Math.min(
+      Math.max(desiredTotal, limits.minBet),
+      limits.maxBet,
+    );
+    const clampedExtra = Math.min(
+      Math.max(clampedTotal - playerCurrentBet, extraMin),
+      extraMax,
+    );
+    setExtraAmount(clampedExtra);
   };
 
   return (

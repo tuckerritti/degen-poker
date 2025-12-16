@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Degen Poker - Double Board Bomb Pot PLO",
-  description: "Play Double Board Bomb Pot PLO poker online with friends",
+  title: "Degen Poker",
+  description: "Play real-time poker online with friends across multiple game modes",
 };
 
 export default function RootLayout({

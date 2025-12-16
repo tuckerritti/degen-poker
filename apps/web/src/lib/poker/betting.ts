@@ -47,6 +47,7 @@ export interface BettingLimits {
 
 /**
  * Gets all betting options available to a player
+ * @param isPotLimit - If true, enforces pot-limit rules; if false, allows no-limit betting
  */
 export function getBettingLimits(
   playerChips: number,
@@ -55,6 +56,7 @@ export function getBettingLimits(
   potSize: number,
   lastRaiseAmount: number,
   bigBlind: number,
+  isPotLimit: boolean = true,
 ): BettingLimits {
   const callAmount = currentBet - playerCurrentBet;
   const canCheck = callAmount === 0;
@@ -62,13 +64,18 @@ export function getBettingLimits(
   const canFold = currentBet > playerCurrentBet;
 
   const minRaise = calculateMinRaise(currentBet, lastRaiseAmount, bigBlind);
-  const maxRaise = calculatePotLimitMax(potSize, currentBet, playerCurrentBet);
+
+  // For pot-limit: calculate max based on pot size
+  // For no-limit: max is entire chip stack
+  const maxRaise = isPotLimit
+    ? calculatePotLimitMax(potSize, currentBet, playerCurrentBet)
+    : playerChips + playerCurrentBet; // Total amount player can commit
 
   const canRaise = playerChips >= minRaise;
 
   return {
-    minBet: Math.min(minRaise, playerChips),
-    maxBet: Math.min(maxRaise, playerChips),
+    minBet: Math.min(minRaise, playerChips + playerCurrentBet),
+    maxBet: Math.min(maxRaise, playerChips + playerCurrentBet),
     canCheck,
     canCall,
     canRaise,

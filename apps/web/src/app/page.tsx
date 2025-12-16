@@ -1,47 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/hooks/useSession";
 
-type GameMode =
-  | "double-board-plo"
-  | "indian-poker"
-  | "holdem-flips"
-  | "321"
-  | "54321";
+type GameMode = "double_board_bomb_pot_plo" | "texas_holdem";
 
 interface GameModeConfig {
   id: GameMode;
   name: string;
   enabled: boolean;
+  description: string;
 }
 
 const GAME_MODES: GameModeConfig[] = [
   {
-    id: "double-board-plo",
+    id: "double_board_bomb_pot_plo",
     name: "Double Board Bomb Pot PLO",
     enabled: true,
+    description: "4 hole cards, 2 boards, bomb pot antes",
   },
   {
-    id: "indian-poker",
-    name: "Indian Poker",
-    enabled: false,
-  },
-  {
-    id: "holdem-flips",
-    name: "Texas Hold'em Flips",
-    enabled: false,
-  },
-  {
-    id: "321",
-    name: "321",
-    enabled: false,
-  },
-  {
-    id: "54321",
-    name: "54321",
-    enabled: false,
+    id: "texas_holdem",
+    name: "Texas Hold'em",
+    enabled: true,
+    description: "2 hole cards, 1 board, standard blinds",
   },
 ];
 
@@ -49,14 +32,24 @@ export default function Home() {
   const router = useRouter();
   const { sessionId, accessToken } = useSession();
   const [selectedMode, setSelectedMode] =
-    useState<GameMode>("double-board-plo");
+    useState<GameMode>("double_board_bomb_pot_plo");
   const [isCreating, setIsCreating] = useState(false);
 
   // Create room form state
   const [smallBlind, setSmallBlind] = useState(5);
   const [bigBlind, setBigBlind] = useState(10);
+  const [bombPotAnte, setBombPotAnte] = useState(20);
   const [minBuyIn, setMinBuyIn] = useState(200);
   const [maxBuyIn, setMaxBuyIn] = useState(1000);
+
+  // Keep buy-in bounds aligned with the active stake type (blinds for Hold'em, ante for PLO)
+  useEffect(() => {
+    const stake = selectedMode === "texas_holdem" ? bigBlind : bombPotAnte;
+    const floor = Math.max(1, stake * 20);
+
+    setMinBuyIn((prev) => (prev < floor ? floor : prev));
+    setMaxBuyIn((prev) => (prev < floor ? floor : prev));
+  }, [selectedMode, bigBlind, bombPotAnte]);
 
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,6 +65,9 @@ export default function Home() {
     setIsCreating(true);
 
     try {
+      const isPLO = selectedMode === "double_board_bomb_pot_plo";
+      const isHoldem = selectedMode === "texas_holdem";
+
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_ENGINE_URL.replace(/\/+$/, "")}/rooms`,
         {
@@ -81,11 +77,14 @@ export default function Home() {
           ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify({
-          smallBlind,
-          bigBlind,
+          // Bomb pot PLO is ante-only; blinds are set to (0, ante) to satisfy engine schema
+          smallBlind: isPLO ? 0 : smallBlind,
+          bigBlind: isPLO ? bombPotAnte : bigBlind,
           minBuyIn,
           maxBuyIn,
-          bombPotAnte: bigBlind * 2, // Bomb pot ante = 2x big blind
+          gameMode: selectedMode,
+          ...(isPLO && { bombPotAnte }),
+          ...(isHoldem && { bombPotAnte: 0 }),
           ownerAuthUserId: sessionId,
         }),
         },
@@ -146,6 +145,9 @@ export default function Home() {
                 >
                   {mode.name}
                 </h3>
+                <p className="mt-1 text-xs text-cigar-ash" style={{ fontFamily: "Lato, sans-serif" }}>
+                  {mode.description}
+                </p>
                 {!mode.enabled && (
                   <span className="mt-2 inline-block text-xs font-semibold text-cigar-ash">
                     COMING SOON
@@ -156,42 +158,65 @@ export default function Home() {
           </div>
 
           <form onSubmit={handleCreateRoom} className="space-y-3 sm:space-y-4">
-            <div className="grid grid-cols-2 gap-3 sm:gap-4">
+            {selectedMode === "texas_holdem" ? (
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                <div>
+                  <label
+                    className="block text-sm font-medium text-cigar-ash"
+                    style={{ fontFamily: "Lato, sans-serif" }}
+                  >
+                    Small Blind
+                  </label>
+                  <input
+                    type="number"
+                    value={smallBlind}
+                    onChange={(e) => setSmallBlind(Number(e.target.value))}
+                    className="mt-1 block w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-cream-parchment shadow-sm focus:border-whiskey-gold focus:outline-none focus:ring-1 focus:ring-whiskey-gold backdrop-blur-sm"
+                    style={{ fontFamily: "Roboto Mono, monospace" }}
+                    min={1}
+                    required
+                  />
+                </div>
+                <div>
+                  <label
+                    className="block text-sm font-medium text-cigar-ash"
+                    style={{ fontFamily: "Lato, sans-serif" }}
+                  >
+                    Big Blind
+                  </label>
+                  <input
+                    type="number"
+                    value={bigBlind}
+                    onChange={(e) => setBigBlind(Number(e.target.value))}
+                    className="mt-1 block w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-cream-parchment shadow-sm focus:border-whiskey-gold focus:outline-none focus:ring-1 focus:ring-whiskey-gold backdrop-blur-sm"
+                    style={{ fontFamily: "Roboto Mono, monospace" }}
+                    min={smallBlind + 1}
+                    required
+                  />
+                </div>
+              </div>
+            ) : (
               <div>
                 <label
                   className="block text-sm font-medium text-cigar-ash"
                   style={{ fontFamily: "Lato, sans-serif" }}
                 >
-                  Small Blind
+                  Bomb Pot Ante (per player)
                 </label>
                 <input
                   type="number"
-                  value={smallBlind}
-                  onChange={(e) => setSmallBlind(Number(e.target.value))}
+                  value={bombPotAnte}
+                  onChange={(e) => setBombPotAnte(Number(e.target.value))}
                   className="mt-1 block w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-cream-parchment shadow-sm focus:border-whiskey-gold focus:outline-none focus:ring-1 focus:ring-whiskey-gold backdrop-blur-sm"
                   style={{ fontFamily: "Roboto Mono, monospace" }}
-                  min="1"
+                  min={1}
                   required
                 />
+                <p className="mt-1 text-xs text-cigar-ash" style={{ fontFamily: "Lato, sans-serif" }}>
+                  Ante-only bomb pot (no blinds collected).
+                </p>
               </div>
-              <div>
-                <label
-                  className="block text-sm font-medium text-cigar-ash"
-                  style={{ fontFamily: "Lato, sans-serif" }}
-                >
-                  Big Blind
-                </label>
-                <input
-                  type="number"
-                  value={bigBlind}
-                  onChange={(e) => setBigBlind(Number(e.target.value))}
-                  className="mt-1 block w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-cream-parchment shadow-sm focus:border-whiskey-gold focus:outline-none focus:ring-1 focus:ring-whiskey-gold backdrop-blur-sm"
-                  style={{ fontFamily: "Roboto Mono, monospace" }}
-                  min={smallBlind + 1}
-                  required
-                />
-              </div>
-            </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3 sm:gap-4">
               <div>
@@ -207,7 +232,7 @@ export default function Home() {
                   onChange={(e) => setMinBuyIn(Number(e.target.value))}
                   className="mt-1 block w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-cream-parchment shadow-sm focus:border-whiskey-gold focus:outline-none focus:ring-1 focus:ring-whiskey-gold backdrop-blur-sm"
                   style={{ fontFamily: "Roboto Mono, monospace" }}
-                  min={bigBlind * 20}
+                  min={(selectedMode === "texas_holdem" ? bigBlind : bombPotAnte) * 20}
                   required
                 />
               </div>

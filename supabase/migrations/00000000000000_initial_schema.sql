@@ -4,10 +4,9 @@
 -- Extensions
 create extension if not exists "pgcrypto";
 
--- Enums
 create type action_type as enum ('fold','check','call','bet','raise','all_in');
-create type game_mode as enum ('double_board_bomb_pot_plo');
-create type game_phase as enum ('waiting','dealing','flop','turn','river','showdown','complete');
+create type game_mode as enum ('double_board_bomb_pot_plo','texas_holdem');
+create type game_phase as enum ('waiting','dealing','flop','turn','river','showdown','complete','preflop');
 
 -- Helper function for updated_at
 create or replace function public.set_updated_at()
@@ -152,7 +151,7 @@ create table public.game_state_secrets (
   game_state_id uuid not null references public.game_states on delete cascade,
   deck_seed text not null,
   full_board1 text[] not null,
-  full_board2 text[] not null,
+  full_board2 text[] null,
   created_at timestamptz not null default now(),
   unique(game_state_id)
 );

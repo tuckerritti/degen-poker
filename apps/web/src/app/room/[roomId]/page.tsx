@@ -334,6 +334,20 @@ export default function RoomPage({
     !room.is_paused &&
     room.current_hand_number === 0; // Only show for first hand
 
+  const gameModeLabel =
+    room?.game_mode === "texas_holdem"
+      ? "Texas Hold'em"
+      : room?.game_mode === "double_board_bomb_pot_plo"
+        ? "Double Board Bomb Pot PLO"
+        : "Loading game...";
+
+  const stakesLabel =
+    room?.game_mode === "texas_holdem"
+      ? `Blinds: ${room.small_blind}/${room.big_blind}`
+      : room
+        ? `Bomb pot ante: ${room.bomb_pot_ante}`
+        : "Loading stakes...";
+
   return (
     <div className="h-screen bg-royal-blue flex flex-col overflow-hidden relative">
       {/* Vignette Effect */}
@@ -353,14 +367,13 @@ export default function RoomPage({
               className="text-lg sm:text-xl font-bold text-cream-parchment"
               style={{ fontFamily: "Playfair Display, serif" }}
             >
-              Double Board Bomb Pot PLO
+              {gameModeLabel}
             </h1>
             <p
               className="text-xs text-cigar-ash"
               style={{ fontFamily: "Roboto Mono, monospace" }}
             >
-              Blinds: {room.small_blind}/{room.big_blind} • Ante:{" "}
-              {room.bomb_pot_ante}
+              {stakesLabel}
             </p>
             {isOwner && (
               <p
@@ -450,6 +463,7 @@ export default function RoomPage({
             potSize={gameState?.pot_size ?? 0}
             sidePots={sidePots}
             phase={gameState?.phase}
+            gameMode={room.game_mode}
             onSeatClick={handleSeatClick}
           />
         </div>
@@ -524,6 +538,7 @@ export default function RoomPage({
             potSize={gameState.pot_size ?? 0}
             bigBlind={room.big_blind}
             lastRaiseAmount={gameState.min_raise ?? room.big_blind}
+            gameMode={room.game_mode}
             onAction={handleAction}
           />
         </div>

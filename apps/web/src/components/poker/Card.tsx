@@ -45,9 +45,8 @@ export function Card({ card, faceDown = false, size = "md" }: CardProps) {
   if (faceDown) {
     return (
       <div
-        className={`${config.container} ${config.rounded} ${config.border} border-gray-600 shadow-lg overflow-hidden`}
+        className={`${config.container} ${config.rounded} ${config.border} relative overflow-hidden border-slate-600 bg-slate-900 shadow-lg`}
       >
-        {/* Using next/image for optimized delivery */}
         <Image
           src="/card-back.jpg"
           alt="Card back"
@@ -56,6 +55,10 @@ export function Card({ card, faceDown = false, size = "md" }: CardProps) {
           className="object-cover"
           priority
         />
+        {/* Outer inset frame to give structure over the image */}
+        <div className="pointer-events-none absolute inset-[7%] rounded-md border border-slate-200/50 shadow-inner" />
+        {/* Subtle vignette */}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-black/10 via-transparent to-black/20" />
       </div>
     );
   }

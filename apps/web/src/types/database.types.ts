@@ -413,7 +413,7 @@ export type Database = {
     }
     Enums: {
       action_type: "fold" | "check" | "call" | "bet" | "raise" | "all_in"
-      game_mode: "double_board_bomb_pot_plo"
+      game_mode: "double_board_bomb_pot_plo" | "texas_holdem"
       game_phase:
         | "waiting"
         | "dealing"
@@ -422,6 +422,7 @@ export type Database = {
         | "river"
         | "showdown"
         | "complete"
+        | "preflop"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -550,7 +551,7 @@ export const Constants = {
   public: {
     Enums: {
       action_type: ["fold", "check", "call", "bet", "raise", "all_in"],
-      game_mode: ["double_board_bomb_pot_plo"],
+      game_mode: ["double_board_bomb_pot_plo", "texas_holdem"],
       game_phase: [
         "waiting",
         "dealing",
@@ -559,6 +560,7 @@ export const Constants = {
         "river",
         "showdown",
         "complete",
+        "preflop",
       ],
     },
   },

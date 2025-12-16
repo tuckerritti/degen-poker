@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import type { RoomPlayer } from "@/types/database";
+import type { GameMode, RoomPlayer } from "@/types/database";
 import { Card } from "./Card";
 import { CommunityCards } from "./CommunityCards";
 
@@ -15,6 +15,7 @@ interface PokerTableProps {
   potSize?: number;
   sidePots?: Array<{ amount: number; eligibleSeats: number[] }>;
   phase?: string;
+  gameMode?: GameMode;
   onSeatClick: (seatNumber: number) => void;
 }
 
@@ -30,6 +31,7 @@ export function PokerTable({
   potSize = 0,
   sidePots = [],
   phase,
+  gameMode,
   onSeatClick,
 }: PokerTableProps) {
   // Detect mobile viewport
@@ -51,6 +53,16 @@ export function PokerTable({
   const tableRotation = isMobile ? 90 : 0;
   // Enlarge felt on mobile only (cards/seats unaffected)
   const tableScale = isMobile ? 1.3 : 1;
+
+  // Hole card count depends on game type (2 for Hold'em, 4 for PLO variants)
+  const holeCardCount = gameMode === "texas_holdem" ? 2 : 4;
+  const holeCardRotationStep = holeCardCount === 2 ? 6 : 8;
+  const holeCardSpread = holeCardCount === 2 ? (isMobile ? 14 : 18) : (isMobile ? 12 : 16);
+  const holeCardFanWidth = Math.max(
+    holeCardCount * (isMobile ? 26 : 32),
+    isMobile ? 60 : 84,
+  );
+  const holeCardFanHeight = isMobile ? 52 : 64;
 
   // Get seated players (not spectators)
   const seatedPlayers = players.filter((p) => !p.is_spectating);
@@ -320,9 +332,10 @@ export function PokerTable({
                       height: isMobile ? "52px" : "64px",
                     }}
                   >
-                    {[0, 1, 2, 3].map((cardIndex) => {
-                      const rotation = (cardIndex - 1.5) * 8; // -12deg, -4deg, 4deg, 12deg
-                      const xOffset = (cardIndex - 1.5) * (isMobile ? 12 : 16); // Horizontal spacing
+                    {Array.from({ length: holeCardCount }, (_, cardIndex) => {
+                      const centerOffset = (holeCardCount - 1) / 2;
+                      const rotation = (cardIndex - centerOffset) * holeCardRotationStep;
+                      const xOffset = (cardIndex - centerOffset) * holeCardSpread;
 
                       return (
                         <div

@@ -1,8 +1,8 @@
 import { randomBytes } from "crypto";
 import { ActionType, GamePhase } from "@poker/shared";
-import { Card, shuffleDeck } from "./deck.js";
+import { shuffleDeck } from "./deck.js";
 import type { GameStateRow, Room, RoomPlayer } from "./types.js";
-import { evaluateOmaha } from "@poker-apprentice/hand-evaluator";
+import { evaluateOmaha, evaluateHoldem } from "@poker-apprentice/hand-evaluator";
 
 export interface DealResult {
   gameState: Partial<GameStateRow>;
@@ -34,12 +34,115 @@ export function actionOrder(players: RoomPlayer[], buttonSeat: number): number[]
   return [...afterButton, ...beforeButton];
 }
 
-function dealBoards(deck: Card[]): { board1: Card[]; board2: Card[]; remaining: Card[] } {
-  const board1 = deck.slice(0, 5);
-  const board2 = deck.slice(5, 10);
-  const remaining = deck.slice(10);
-  return { board1, board2, remaining };
+interface BlindPostingResult {
+  updatedPlayers: Partial<RoomPlayer>[];
+  totalPosted: number;
+  currentBet: number;
+  sbSeat: number | null;
+  bbSeat: number | null;
 }
+
+export function postBlinds(
+  players: RoomPlayer[],
+  buttonSeat: number,
+  smallBlind: number,
+  bigBlind: number
+): BlindPostingResult {
+  const activePlayers = players.filter(
+    (p) => !p.is_spectating && !p.is_sitting_out && p.chip_stack > 0,
+  );
+
+  const order = actionOrder(activePlayers, buttonSeat);
+
+  // Handle heads-up (2 players): button posts SB, other player posts BB
+  const isHeadsUp = activePlayers.length === 2;
+
+  let sbSeat: number | null = null;
+  let bbSeat: number | null = null;
+  let totalPosted = 0;
+  const updatedPlayers: Partial<RoomPlayer>[] = [];
+
+  if (isHeadsUp) {
+    // Heads-up: button is small blind, other player is big blind
+    sbSeat = buttonSeat;
+    bbSeat = order[0]; // First after button
+  } else {
+    // Normal: first after button is SB, second after button is BB
+    sbSeat = order[0];
+    bbSeat = order[1];
+  }
+
+  // Post small blind
+  if (sbSeat !== null) {
+    const sbPlayer = players.find((p) => p.seat_number === sbSeat);
+    if (sbPlayer) {
+      const sbAmount = Math.min(sbPlayer.chip_stack, smallBlind);
+      const remaining = sbPlayer.chip_stack - sbAmount;
+      updatedPlayers.push({
+        id: sbPlayer.id,
+        room_id: sbPlayer.room_id,
+        seat_number: sbPlayer.seat_number,
+        auth_user_id: sbPlayer.auth_user_id,
+        display_name: sbPlayer.display_name,
+        total_buy_in: sbPlayer.total_buy_in,
+        chip_stack: remaining,
+        total_invested_this_hand: sbAmount,
+        current_bet: sbAmount,
+        has_folded: false,
+        is_all_in: remaining === 0,
+      });
+      sbPlayer.chip_stack = remaining;
+      sbPlayer.current_bet = sbAmount;
+      sbPlayer.total_invested_this_hand = sbAmount;
+      if (remaining === 0) sbPlayer.is_all_in = true;
+      totalPosted += sbAmount;
+    }
+  }
+
+  // Post big blind
+  if (bbSeat !== null) {
+    const bbPlayer = players.find((p) => p.seat_number === bbSeat);
+    if (bbPlayer) {
+      const bbAmount = Math.min(bbPlayer.chip_stack, bigBlind);
+      const remaining = bbPlayer.chip_stack - bbAmount;
+      updatedPlayers.push({
+        id: bbPlayer.id,
+        room_id: bbPlayer.room_id,
+        seat_number: bbPlayer.seat_number,
+        auth_user_id: bbPlayer.auth_user_id,
+        display_name: bbPlayer.display_name,
+        total_buy_in: bbPlayer.total_buy_in,
+        chip_stack: remaining,
+        total_invested_this_hand: bbAmount,
+        current_bet: bbAmount,
+        has_folded: false,
+        is_all_in: remaining === 0,
+      });
+      bbPlayer.chip_stack = remaining;
+      bbPlayer.current_bet = bbAmount;
+      bbPlayer.total_invested_this_hand = bbAmount;
+      if (remaining === 0) bbPlayer.is_all_in = true;
+      totalPosted += bbAmount;
+    }
+  }
+
+  return {
+    updatedPlayers,
+    totalPosted,
+    currentBet: bigBlind,
+    sbSeat,
+    bbSeat,
+  };
+}
+
+// dealBoards function was previously used for PLO; now boards are dealt inline in dealHand()
+// Kept for reference but unused after refactoring for multi-game mode support
+// function dealBoards(deck: Card[]): { board1: Card[]; board2: Card[]; remaining: Card[] } {
+//   const board1 = deck.slice(0, 5);
+//   const board2 = deck.slice(5, 10);
+//   const remaining = deck.slice(10);
+//   return { board1, board2, remaining };
+// }
 
 export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
   // Generate a cryptographically strong, non-guessable seed and never expose it to clients
@@ -50,50 +153,86 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
     (p) => !p.is_spectating && !p.is_sitting_out && p.chip_stack > 0,
   );
 
-  // deal four cards to each active seat
+  const isHoldem = room.game_mode === "texas_holdem";
+  const cardsPerPlayer = isHoldem ? 2 : 4;
+
+  // Deal hole cards
   let cursor = 0;
   const playerHands = activePlayers.map((p) => {
-    const cards = deck.slice(cursor, cursor + 4);
-    cursor += 4;
+    const cards = deck.slice(cursor, cursor + cardsPerPlayer);
+    cursor += cardsPerPlayer;
     return { seat_number: p.seat_number, cards, auth_user_id: p.auth_user_id };
   });
 
-  const { board1, board2 } = dealBoards(deck.slice(cursor));
+  // Deal boards
+  const board1 = deck.slice(cursor, cursor + 5);
+  cursor += 5;
+  const board2 = isHoldem ? [] : deck.slice(cursor, cursor + 5);
 
-  // antes
-  const ante = room.bomb_pot_ante ?? 0;
-  const updatedPlayers: Partial<RoomPlayer>[] = activePlayers.map((p) => {
-    const antePaid = Math.min(p.chip_stack, ante);
-    const remaining = p.chip_stack - antePaid;
-    return {
-      id: p.id,
-      room_id: p.room_id,
-      seat_number: p.seat_number,
-      auth_user_id: p.auth_user_id,
-      display_name: p.display_name,
-      total_buy_in: p.total_buy_in,
-      chip_stack: remaining,
-      total_invested_this_hand: antePaid,
-      current_bet: antePaid,
-      has_folded: false,
-      is_all_in: remaining === 0,
-    } as Partial<RoomPlayer>;
-  });
-
-  const totalAnte = updatedPlayers.reduce((sum, p) => sum + (p.total_invested_this_hand ?? 0), 0);
   const buttonSeat = nextButtonSeat(activePlayers, room.button_seat);
-  const order = actionOrder(activePlayers, buttonSeat);
-  const seatsToAct = order.filter((s) => !updatedPlayers.find((p) => p.seat_number === s)?.is_all_in);
-  const currentActor = seatsToAct[0] ?? null;
+  let updatedPlayers: Partial<RoomPlayer>[] = [];
+  let totalPot = 0;
+  let currentBet = 0;
+  let seatsToAct: number[] = [];
+  let currentActor: number | null = null;
+
+  if (isHoldem) {
+    // Post blinds for Texas Hold'em
+    const blindResult = postBlinds(activePlayers, buttonSeat, room.small_blind, room.big_blind);
+    updatedPlayers = blindResult.updatedPlayers;
+    totalPot = blindResult.totalPosted;
+    currentBet = blindResult.currentBet;
+
+    // For preflop, action starts first after big blind (UTG)
+    const order = actionOrder(activePlayers, buttonSeat);
+    // Skip small blind and big blind to find UTG
+    const isHeadsUp = activePlayers.length === 2;
+
+    seatsToAct = isHeadsUp
+      ? order.filter((s) => !updatedPlayers.find((p) => p.seat_number === s)?.is_all_in)
+      : order.slice(2).concat(order.slice(0, 2)).filter((s) => !updatedPlayers.find((p) => p.seat_number === s)?.is_all_in);
+    currentActor = seatsToAct[0] ?? null;
+  } else {
+    // Post antes for PLO bomb pot
+    const ante = room.bomb_pot_ante ?? 0;
+    updatedPlayers = activePlayers.map((p) => {
+      const antePaid = Math.min(p.chip_stack, ante);
+      const remaining = p.chip_stack - antePaid;
+      return {
+        id: p.id,
+        room_id: p.room_id,
+        seat_number: p.seat_number,
+        auth_user_id: p.auth_user_id,
+        display_name: p.display_name,
+        total_buy_in: p.total_buy_in,
+        chip_stack: remaining,
+        total_invested_this_hand: antePaid,
+        current_bet: antePaid,
+        has_folded: false,
+        is_all_in: remaining === 0,
+      } as Partial<RoomPlayer>;
+    });
+
+    totalPot = updatedPlayers.reduce((sum, p) => sum + (p.total_invested_this_hand ?? 0), 0);
+    currentBet = ante > 0 ? ante : 0;
+    const order = actionOrder(activePlayers, buttonSeat);
+    seatsToAct = order.filter((s) => !updatedPlayers.find((p) => p.seat_number === s)?.is_all_in);
+    currentActor = seatsToAct[0] ?? null;
+  }
+
+  const initialPhase = isHoldem ? "preflop" : "flop";
+  const initialBoardState = isHoldem
+    ? { board1: [], board2: [] }  // No cards shown preflop
+    : { board1: board1.slice(0, 3), board2: board2.slice(0, 3) };  // Show 3 cards on flop for PLO
 
   const gameState: Partial<GameStateRow> = {
     room_id: room.id,
     hand_number: room.current_hand_number + 1,
     deck_seed: "hidden",
     button_seat: buttonSeat,
-    phase: "flop",
-    pot_size: totalAnte,
-    current_bet: ante > 0 ? ante : 0,
+    phase: initialPhase,
+    pot_size: totalPot,
+    current_bet: currentBet,
     min_raise: room.big_blind,
     current_actor_seat: currentActor,
     last_aggressor_seat: null,
@@ -103,10 +242,7 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
     seats_to_act: seatsToAct,
     seats_acted: [],
     burned_card_indices: [],
-    board_state: {
-      board1: board1.slice(0, 3),
-      board2: board2.slice(0, 3),
-    },
+    board_state: initialBoardState,
     side_pots: [],
     action_history: [],
   };
@@ -335,23 +471,19 @@ export function applyAction(
   if (awaiting === 0 && allBetsEqual) {
     const activeNonFoldedPlayers = players.filter((p) => !p.has_folded && !p.is_spectating && !p.is_sitting_out);
     const nonAllInCount = activeNonFoldedPlayers.filter((p) => !p.is_all_in).length;
-    const contributionLevels = new Set(
-      activeNonFoldedPlayers.map((p) =>
-        Math.max(p.total_invested_this_hand ?? 0, p.current_bet ?? 0),
-      ),
-    );
 
     // Debug aid for street-closing logic; keep disabled in production
-    // console.log('street-closure', { nonAllInCount, contributionLevels: Array.from(contributionLevels), awaiting, allBetsEqual });
+    // console.log('street-closure', { nonAllInCount, awaiting, allBetsEqual });
 
-    // If everyone has matched contributions and there is no one left who can raise (only one non-all-in),
-    // fast-forward to showdown/complete.
-    if (nonAllInCount <= 1 && contributionLevels.size === 1) {
+    // If no more betting action is possible (0 or 1 non-all-in players remaining),
+    // fast-forward to showdown/complete and reveal all community cards.
+    if (nonAllInCount <= 1) {
+      const isHoldem = room.game_mode === "texas_holdem";
       const updatedBoardState = {
         board1: fullBoard1.slice(0, 5),
-        board2: fullBoard2.slice(0, 5),
+        board2: isHoldem ? [] : fullBoard2.slice(0, 5),
         fullBoard1: fullBoard1,
-        fullBoard2: fullBoard2,
+        fullBoard2: isHoldem ? [] : fullBoard2,
       };
 
       const calculatedSidePotsFinal = calculateSidePots(activeNonFoldedPlayers as RoomPlayer[]);
@@ -414,19 +546,37 @@ export function applyAction(
       fullBoard1?: string[];
       fullBoard2?: string[];
     } = { ...boardState };
-    if (nextPhase === "turn") {
+
+    const isHoldem = room.game_mode === "texas_holdem";
+
+    if (nextPhase === "flop") {
+      // Flop: reveal 3 cards (only for Hold'em when transitioning from preflop)
+      updatedBoardState.board1 = fullBoard1.slice(0, 3);
+      updatedBoardState.board2 = isHoldem ? [] : fullBoard2.slice(0, 3);
+      if (!isHoldem) {
+        updatedBoardState.fullBoard1 = fullBoard1;
+        updatedBoardState.fullBoard2 = fullBoard2;
+      }
+    } else if (nextPhase === "turn") {
+      // Turn: reveal 4 cards
       updatedBoardState.board1 = fullBoard1.slice(0, 4);
-      updatedBoardState.board2 = fullBoard2.slice(0, 4);
-      updatedBoardState.fullBoard1 = fullBoard1;
-      updatedBoardState.fullBoard2 = fullBoard2;
+      updatedBoardState.board2 = isHoldem ? [] : fullBoard2.slice(0, 4);
+      if (!isHoldem) {
+        updatedBoardState.fullBoard1 = fullBoard1;
+        updatedBoardState.fullBoard2 = fullBoard2;
+      }
     } else if (nextPhase === "river") {
+      // River: reveal all 5 cards
       updatedBoardState.board1 = fullBoard1.slice(0, 5);
-      updatedBoardState.board2 = fullBoard2.slice(0, 5);
-      updatedBoardState.fullBoard1 = fullBoard1;
-      updatedBoardState.fullBoard2 = fullBoard2;
+      updatedBoardState.board2 = isHoldem ? [] : fullBoard2.slice(0, 5);
+      if (!isHoldem) {
+        updatedBoardState.fullBoard1 = fullBoard1;
+        updatedBoardState.fullBoard2 = fullBoard2;
+      }
     } else if (nextPhase === "showdown" || nextPhase === "complete") {
+      // Showdown: reveal all 5 cards
       updatedBoardState.board1 = fullBoard1.slice(0, 5);
-      updatedBoardState.board2 = fullBoard2.slice(0, 5);
+      updatedBoardState.board2 = isHoldem ? [] : fullBoard2.slice(0, 5);
       updatedBoardState.fullBoard1 = fullBoard1;
       updatedBoardState.fullBoard2 = fullBoard2;
     }
@@ -530,7 +680,7 @@ export function applyAction(
 }
 
 export function advancePhase(current: GamePhase): GamePhase {
-  const order: GamePhase[] = ["flop", "turn", "river", "showdown", "complete"];
+  const order: GamePhase[] = ["preflop", "flop", "turn", "river", "showdown", "complete"];
   const idx = order.indexOf(current);
   if (idx === -1 || idx === order.length - 1) return "complete";
   return order[idx + 1];
@@ -592,6 +742,51 @@ export function determineDoubleBoardWinners(
     .map((e) => e.seatNumber);
 
   return { board1Winners, board2Winners };
+}
+
+/**
+ * Evaluate a single player's best hand for Hold'em (standard poker rules)
+ */
+function evaluateHoldemHand(holeCards: string[], board: string[]): { strength: number; hand: string[] } {
+  try {
+    const evaluated = evaluateHoldem({
+      holeCards: holeCards as unknown as Parameters<typeof evaluateHoldem>[0]['holeCards'],
+      communityCards: board as unknown as Parameters<typeof evaluateHoldem>[0]['communityCards'],
+    });
+    return {
+      strength: evaluated.strength,
+      hand: evaluated.hand,
+    };
+  } catch (err) {
+    return { strength: 0, hand: [] };
+  }
+}
+
+/**
+ * Determine winners for single board Hold'em
+ * @returns Array of winning seat numbers (can be multiple if tie)
+ */
+export function determineSingleBoardWinners(
+  playerHands: Array<{ seatNumber: number; cards: string[] }>,
+  board: string[],
+): number[] {
+  if (playerHands.length === 0) {
+    return [];
+  }
+
+  // Evaluate each player
+  const evaluations = playerHands.map((ph) => ({
+    seatNumber: ph.seatNumber,
+    evaluation: evaluateHoldemHand(ph.cards, board),
+  }));
+
+  // Find best hand(s)
+  const maxStrength = Math.max(...evaluations.map((e) => e.evaluation.strength));
+  const winners = evaluations
+    .filter((e) => e.evaluation.strength === maxStrength)
+    .map((e) => e.seatNumber);
+
+  return winners;
 }
 
 /**
