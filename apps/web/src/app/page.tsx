@@ -35,7 +35,6 @@ export default function Home() {
     useState<GameMode>("double_board_bomb_pot_plo");
   const [isCreating, setIsCreating] = useState(false);
 
-  // Create room form state
   const [smallBlind, setSmallBlind] = useState(5);
   const [bigBlind, setBigBlind] = useState(10);
   const [bombPotAnte, setBombPotAnte] = useState(20);

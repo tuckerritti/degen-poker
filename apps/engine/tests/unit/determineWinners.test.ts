@@ -169,5 +169,21 @@ describe('Determine Double Board Winners', () => {
       expect(result.board1Winners.length).toBeGreaterThan(0);
       expect(result.board2Winners.length).toBeGreaterThan(0);
     });
+
+    it('should break ties using kickers (not just hand category)', () => {
+      const playerHands = [
+        { seatNumber: 1, cards: ['Ac', 'Kc', 'Qd', 'Jd'] }, // Pair of aces with king kicker
+        { seatNumber: 2, cards: ['Ad', '5d', '4c', '3c'] }  // Pair of aces with low kicker
+      ];
+
+      const result = determineDoubleBoardWinners(
+        playerHands,
+        ['As', '9d', '8c', '7h', '2s'], // Both make pair of aces; seat 1 should win via king kicker
+        ['2h', '3d', '4s', '5s', '9c']  // Seat 2 makes wheel straight here
+      );
+
+      expect(result.board1Winners).toEqual([1]);
+      expect(result.board2Winners).toEqual(expect.arrayContaining([2]));
+    });
   });
 });

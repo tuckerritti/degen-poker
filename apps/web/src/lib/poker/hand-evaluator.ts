@@ -1,4 +1,4 @@
-import { evaluate } from "@poker-apprentice/hand-evaluator";
+import { compare, evaluate } from "@poker-apprentice/hand-evaluator";
 import { createLogger } from "@/lib/logger";
 
 const evalLogger = createLogger("poker-hand-evaluator");
@@ -134,13 +134,11 @@ export function evaluatePLOHandPartial(
       { holeCardsCount: holeCards.length },
       "Invalid PLO hand - must have 4 hole cards",
     );
-    return { rank: Infinity, description: "Invalid hand", hand: [] };
+    return { rank: -1, description: "Invalid hand", hand: [] };
   }
 
   // For partial boards, evaluate all valid combinations with available cards
-  let bestRank = -1;
-  let bestDescription = "";
-  let bestHand: string[] = [];
+  let bestEvaluation: ReturnType<typeof evaluate> | null = null;
 
   // PLO rule: must use exactly 2 from hand, exactly 3 from board
   // For partial boards (3-4 cards), we evaluate all possible 3-card combinations
@@ -161,18 +159,18 @@ export function evaluatePLOHandPartial(
             try {
               // Type assertion needed because hand-evaluator expects specific card type union
               const result = evaluate({
-                holeCards: hand as unknown as Parameters<
-                  typeof evaluate
-                >[0]["holeCards"],
-              });
-              // Higher strength number = better hand
-              if (result.strength > bestRank) {
-                bestRank = result.strength;
-                bestHand = result.hand as unknown as string[];
-                bestDescription = getDetailedDescription(
-                  result.strength,
-                  bestHand,
-                );
+              holeCards: hand as unknown as Parameters<
+                typeof evaluate
+              >[0]["holeCards"],
+            });
+              if (
+                !bestEvaluation ||
+                compare(
+                  result as ReturnType<typeof evaluate>,
+                  bestEvaluation,
+                ) === -1
+              ) {
+                bestEvaluation = result as ReturnType<typeof evaluate>;
               }
             } catch (error) {
               evalLogger.error(
@@ -193,14 +191,30 @@ export function evaluatePLOHandPartial(
     {
       holeCards,
       boardCards,
-      bestRank,
-      bestDescription,
-      bestHand,
+      bestRank: bestEvaluation?.strength ?? -1,
+      bestDescription: bestEvaluation
+        ? getDetailedDescription(
+            bestEvaluation.strength,
+            bestEvaluation.hand as unknown as string[],
+          )
+        : "",
+      bestHand: bestEvaluation?.hand ?? [],
     },
     "PLO partial hand evaluated",
   );
 
-  return { rank: bestRank, description: bestDescription, hand: bestHand };
+  if (!bestEvaluation) {
+    return { rank: -1, description: "Invalid hand", hand: [] };
+  }
+
+  return {
+    rank: bestEvaluation.strength,
+    description: getDetailedDescription(
+      bestEvaluation.strength,
+      bestEvaluation.hand as unknown as string[],
+    ),
+    hand: bestEvaluation.hand as unknown as string[],
+  };
 }
 
 /**
@@ -218,7 +232,7 @@ export function evaluatePLOHand(
       { holeCardsCount: holeCards.length },
       "Invalid PLO hand - must have 4 hole cards",
     );
-    return { rank: Infinity, description: "Invalid hand", hand: [] };
+    return { rank: -1, description: "Invalid hand", hand: [] };
   }
 
   if (boardCards.length !== 5) {
@@ -226,14 +240,12 @@ export function evaluatePLOHand(
       { boardCardsCount: boardCards.length },
       "Invalid board - must have 5 cards",
     );
-    return { rank: Infinity, description: "Invalid board", hand: [] };
+    return { rank: -1, description: "Invalid board", hand: [] };
   }
 
   // PLO rule: must use exactly 2 from hand, 3 from board
   // Try all combinations (C(4,2) * C(5,3) = 6 * 10 = 60 combinations)
-  let bestRank = -1;
-  let bestDescription = "";
-  let bestHand: string[] = [];
+  let bestEvaluation: ReturnType<typeof evaluate> | null = null;
 
   for (let h1 = 0; h1 < 4; h1++) {
     for (let h2 = h1 + 1; h2 < 4; h2++) {
@@ -251,18 +263,18 @@ export function evaluatePLOHand(
             try {
               // Type assertion needed because hand-evaluator expects specific card type union
               const result = evaluate({
-                holeCards: hand as unknown as Parameters<
-                  typeof evaluate
-                >[0]["holeCards"],
-              });
-              // Higher strength number = better hand
-              if (result.strength > bestRank) {
-                bestRank = result.strength;
-                bestHand = result.hand as unknown as string[];
-                bestDescription = getDetailedDescription(
-                  result.strength,
-                  bestHand,
-                );
+              holeCards: hand as unknown as Parameters<
+                typeof evaluate
+              >[0]["holeCards"],
+            });
+              if (
+                !bestEvaluation ||
+                compare(
+                  result as ReturnType<typeof evaluate>,
+                  bestEvaluation,
+                ) === -1
+              ) {
+                bestEvaluation = result as ReturnType<typeof evaluate>;
               }
             } catch (error) {
               evalLogger.error(
@@ -283,14 +295,30 @@ export function evaluatePLOHand(
     {
       holeCards,
       boardCards,
-      bestRank,
-      bestDescription,
-      bestHand,
+      bestRank: bestEvaluation?.strength ?? -1,
+      bestDescription: bestEvaluation
+        ? getDetailedDescription(
+            bestEvaluation.strength,
+            bestEvaluation.hand as unknown as string[],
+          )
+        : "",
+      bestHand: bestEvaluation?.hand ?? [],
     },
     "PLO hand evaluated",
   );
 
-  return { rank: bestRank, description: bestDescription, hand: bestHand };
+  if (!bestEvaluation) {
+    return { rank: -1, description: "Invalid hand", hand: [] };
+  }
+
+  return {
+    rank: bestEvaluation.strength,
+    description: getDetailedDescription(
+      bestEvaluation.strength,
+      bestEvaluation.hand as unknown as string[],
+    ),
+    hand: bestEvaluation.hand as unknown as string[],
+  };
 }
 
 /**
@@ -455,18 +483,53 @@ export function findBoardWinners(
     ...evaluatePLOHand(p.holeCards, boardCards),
   }));
 
-  // Find best rank (higher is better)
-  const bestRank = Math.max(...evaluations.map((e) => e.rank));
+  // Find best hand using full compare (strength + kickers)
+  const bestEvaluation = evaluations.reduce<typeof evaluations[number] | null>(
+    (best, current) => {
+      if (!best) return current;
+      const comparison = compare(
+        {
+          strength: current.rank,
+          hand: current.hand as unknown as Parameters<typeof compare>[0]["hand"],
+        },
+        {
+          strength: best.rank,
+          hand: best.hand as unknown as Parameters<typeof compare>[0]["hand"],
+        },
+      );
+      return comparison === -1 ? current : best;
+    },
+    null,
+  );
+
+  if (!bestEvaluation) {
+    evalLogger.warn("No valid evaluations found");
+    return [];
+  }
 
   // Return all players with the best rank (handles ties)
-  const winners = evaluations.filter((e) => e.rank === bestRank);
+  const winners = evaluations.filter(
+    (e) =>
+      compare(
+        {
+          strength: e.rank,
+          hand: e.hand as unknown as Parameters<typeof compare>[0]["hand"],
+        },
+        {
+          strength: bestEvaluation.rank,
+          hand: bestEvaluation.hand as unknown as Parameters<
+            typeof compare
+          >[0]["hand"],
+        },
+      ) === 0,
+  );
 
   evalLogger.info(
     {
       boardCards,
       totalPlayers: activePlayers.length,
       winnerCount: winners.length,
-      bestRank,
+      bestRank: bestEvaluation.rank,
       isTie: winners.length > 1,
     },
     "Board winners determined",

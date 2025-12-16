@@ -2,7 +2,7 @@ import { randomBytes } from "crypto";
 import { ActionType, GamePhase } from "@poker/shared";
 import { shuffleDeck } from "./deck.js";
 import type { GameStateRow, Room, RoomPlayer } from "./types.js";
-import { evaluateOmaha, evaluateHoldem } from "@poker-apprentice/hand-evaluator";
+import { compare, evaluateOmaha, evaluateHoldem } from "@poker-apprentice/hand-evaluator";
 
 export interface DealResult {
   gameState: Partial<GameStateRow>;
@@ -168,7 +168,6 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
   const board1 = deck.slice(cursor, cursor + 5);
   cursor += 5;
   const board2 = isHoldem ? [] : deck.slice(cursor, cursor + 5);
-
   const buttonSeat = nextButtonSeat(activePlayers, room.button_seat);
   let updatedPlayers: Partial<RoomPlayer>[] = [];
   let totalPot = 0;
@@ -302,7 +301,8 @@ export function applyAction(
 
   let pot = gameState.pot_size ?? 0;
   let currentBet = gameState.current_bet ?? 0;
-  let minRaise = gameState.min_raise ?? room.big_blind;
+  const baseBet = Math.max(room.bomb_pot_ante ?? 0, room.big_blind);
+  let minRaise = gameState.min_raise ?? baseBet;
   const updatedPlayers: Partial<RoomPlayer>[] = [];
   let seatsToAct = [...(gameState.seats_to_act ?? [])];
   let seatsActed = [...(gameState.seats_acted ?? [])];
@@ -701,7 +701,7 @@ function evaluatePlayerHand(holeCards: string[], board: string[]): { strength: n
       strength: evaluated.strength,
       hand: evaluated.hand,
     };
-  } catch (err) {
+  } catch {
     // Fallback: return worst possible hand if evaluation fails
     return { strength: 0, hand: [] };
   }
@@ -729,17 +729,50 @@ export function determineDoubleBoardWinners(
     board2: evaluatePlayerHand(ph.cards, board2),
   }));
 
-  // Find best hand(s) for board 1
-  const maxStrength1 = Math.max(...evaluations.map((e) => e.board1.strength));
-  const board1Winners = evaluations
-    .filter((e) => e.board1.strength === maxStrength1)
-    .map((e) => e.seatNumber);
+  type Evaluated = { strength: number; hand: string[] };
+  const bestBoard1 = evaluations.reduce<Evaluated | null>((best, current) => {
+    if (!best) return current.board1;
+    const comparison = compare(
+      current.board1 as unknown as Parameters<typeof compare>[0],
+      best as unknown as Parameters<typeof compare>[0],
+    );
+    return comparison === -1 ? current.board1 : best;
+  }, null);
 
-  // Find best hand(s) for board 2
-  const maxStrength2 = Math.max(...evaluations.map((e) => e.board2.strength));
-  const board2Winners = evaluations
-    .filter((e) => e.board2.strength === maxStrength2)
-    .map((e) => e.seatNumber);
+  const bestBoard2 = evaluations.reduce<Evaluated | null>((best, current) => {
+    if (!best) return current.board2;
+    const comparison = compare(
+      current.board2 as unknown as Parameters<typeof compare>[0],
+      best as unknown as Parameters<typeof compare>[0],
+    );
+    return comparison === -1 ? current.board2 : best;
+  }, null);
+
+  const board1Winners =
+    bestBoard1 === null
+      ? []
+      : evaluations
+          .filter(
+            (e) =>
+              compare(
+                e.board1 as unknown as Parameters<typeof compare>[0],
+                bestBoard1 as unknown as Parameters<typeof compare>[0],
+              ) === 0,
+          )
+          .map((e) => e.seatNumber);
+
+  const board2Winners =
+    bestBoard2 === null
+      ? []
+      : evaluations
+          .filter(
+            (e) =>
+              compare(
+                e.board2 as unknown as Parameters<typeof compare>[0],
+                bestBoard2 as unknown as Parameters<typeof compare>[0],
+              ) === 0,
+          )
+          .map((e) => e.seatNumber);
 
   return { board1Winners, board2Winners };
 }

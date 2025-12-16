@@ -41,12 +41,13 @@ async function requireUser(req: Request, res: Response): Promise<string | null> 
 }
 
 const createRoomSchema = z.object({
-  smallBlind: z.number().int().positive(),
-  bigBlind: z.number().int().positive(),
+  // Bomb pots are ante-only; blinds are optional and derived when omitted.
+  smallBlind: z.number().int().positive().optional(),
+  bigBlind: z.number().int().positive().optional(),
   minBuyIn: z.number().int().positive(),
   maxBuyIn: z.number().int().positive(),
   maxPlayers: z.number().int().min(2).max(10).optional(),
-  bombPotAnte: z.number().int().min(0).optional(),
+  bombPotAnte: z.number().int().min(1, "bombPotAnte must be at least 1"),
   interHandDelay: z.number().int().min(0).optional(),
   pauseAfterHand: z.boolean().optional(),
   gameMode: z.enum(["double_board_bomb_pot_plo", "texas_holdem"]).optional(),
@@ -87,11 +88,21 @@ app.post("/rooms", async (req: Request, res: Response) => {
     if (!userId) return;
 
     const payload = createRoomSchema.parse(req.body);
-    if (payload.bigBlind <= payload.smallBlind) {
-      return res.status(400).json({ error: "bigBlind must be greater than smallBlind" });
+
+    // Derive blinds from ante when not supplied; blinds remain stored for min-raise math
+    const effectiveBigBlind = payload.bigBlind ?? Math.max(payload.bombPotAnte, 2);
+    let effectiveSmallBlind =
+      payload.smallBlind ?? Math.max(1, Math.min(effectiveBigBlind - 1, Math.floor(effectiveBigBlind / 2)));
+
+    if (effectiveSmallBlind >= effectiveBigBlind) {
+      effectiveSmallBlind = Math.max(1, effectiveBigBlind - 1);
     }
+
     if (payload.maxBuyIn < payload.minBuyIn) {
       return res.status(400).json({ error: "maxBuyIn must be >= minBuyIn" });
+    }
+    if (effectiveBigBlind <= effectiveSmallBlind) {
+      return res.status(400).json({ error: "bigBlind must be greater than smallBlind" });
     }
 
     const gameMode = payload.gameMode ?? "double_board_bomb_pot_plo";
@@ -104,12 +115,12 @@ app.post("/rooms", async (req: Request, res: Response) => {
     const { data, error } = await supabase
       .from("rooms")
       .insert({
-        small_blind: payload.smallBlind,
-        big_blind: payload.bigBlind,
+        small_blind: effectiveSmallBlind,
+        big_blind: effectiveBigBlind,
         min_buy_in: payload.minBuyIn,
         max_buy_in: payload.maxBuyIn,
         max_players: payload.maxPlayers ?? 9,
-        bomb_pot_ante: payload.bombPotAnte ?? 0,
+        bomb_pot_ante: payload.bombPotAnte,
         inter_hand_delay: payload.interHandDelay ?? 5,
         pause_after_hand: payload.pauseAfterHand ?? false,
         game_mode: gameMode,

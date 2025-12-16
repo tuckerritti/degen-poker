@@ -218,10 +218,11 @@ describe('Deal Hand', () => {
       expect(result.gameState.hand_number).toBe(1); // room.current_hand_number + 1
     });
 
-    it('should set min raise to big blind', () => {
+    it('should set min raise to ante (falls back to big blind when ante is 0)', () => {
       const result = dealHand(standardRoom, threePlayers);
 
-      expect(result.gameState.min_raise).toBe(2); // standardRoom.big_blind
+      // Ante drives the opening stake size in bomb pots
+      expect(result.gameState.min_raise).toBe(5); // standardRoom.bomb_pot_ante
     });
 
     it('should initialize action tracking fields', () => {
