@@ -553,7 +553,7 @@ function evaluatePlayerHand(holeCards: string[], board: string[]): { strength: n
       strength: evaluated.strength,
       hand: evaluated.hand,
     };
-  } catch (err) {
+  } catch {
     // Fallback: return worst possible hand if evaluation fails
     return { strength: 0, hand: [] };
   }
