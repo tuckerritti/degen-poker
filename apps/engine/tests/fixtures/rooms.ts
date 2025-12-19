@@ -6,9 +6,8 @@ export const standardRoom: Room = {
   max_players: 9,
   min_buy_in: 100,
   max_buy_in: 1000,
-  small_blind: 1,
-  big_blind: 2,
-  bomb_pot_ante: 5,
+  small_blind: 0,
+  big_blind: 5, // BB doubles as ante for PLO
   button_seat: null,
   current_hand_number: 0,
   inter_hand_delay: 3000,
@@ -17,10 +16,4 @@ export const standardRoom: Room = {
   is_active: true,
   last_activity_at: null,
   owner_auth_user_id: null
-};
-
-export const noAnteRoom: Room = {
-  ...standardRoom,
-  id: 'no-ante-room',
-  bomb_pot_ante: 0
 };

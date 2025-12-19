@@ -345,7 +345,7 @@ export default function RoomPage({
     room?.game_mode === "texas_holdem"
       ? `Blinds: ${room.small_blind}/${room.big_blind}`
       : room
-        ? `Bomb pot ante: ${room.bomb_pot_ante}`
+        ? `Bomb pot ante (BB): ${room.big_blind}`
         : "Loading stakes...";
 
   return (

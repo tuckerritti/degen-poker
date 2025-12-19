@@ -29,7 +29,6 @@ create table public.rooms (
   max_buy_in int not null,
   small_blind int not null,
   big_blind int not null,
-  bomb_pot_ante int not null default 0,
   button_seat int null,
   current_hand_number int not null default 0,
   inter_hand_delay int not null default 5,

@@ -344,7 +344,6 @@ export type Database = {
       rooms: {
         Row: {
           big_blind: number
-          bomb_pot_ante: number
           button_seat: number | null
           created_at: string
           current_hand_number: number
@@ -364,7 +363,6 @@ export type Database = {
         }
         Insert: {
           big_blind: number
-          bomb_pot_ante?: number
           button_seat?: number | null
           created_at?: string
           current_hand_number?: number
@@ -384,7 +382,6 @@ export type Database = {
         }
         Update: {
           big_blind?: number
-          bomb_pot_ante?: number
           button_seat?: number | null
           created_at?: string
           current_hand_number?: number
@@ -565,4 +562,3 @@ export const Constants = {
     },
   },
 } as const
-

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { dealHand } from '../../src/logic.js';
-import { standardRoom, noAnteRoom } from '../fixtures/rooms.js';
+import { standardRoom } from '../fixtures/rooms.js';
 import { createPlayer, threePlayers, sixPlayers } from '../fixtures/players.js';
 
 describe('Deal Hand', () => {
@@ -56,28 +56,10 @@ describe('Deal Hand', () => {
       });
     });
 
-    it('should not collect antes when ante is 0', () => {
-      const result = dealHand(noAnteRoom, threePlayers);
-
-      expect(result.gameState.pot_size).toBe(0);
-
-      result.updatedPlayers.forEach(player => {
-        expect(player.total_invested_this_hand).toBe(0);
-        expect(player.current_bet).toBe(0);
-        expect(player.chip_stack).toBe(500);
-      });
-    });
-
     it('should set current bet to ante amount', () => {
       const result = dealHand(standardRoom, threePlayers);
 
       expect(result.gameState.current_bet).toBe(5);
-    });
-
-    it('should set current bet to 0 when no ante', () => {
-      const result = dealHand(noAnteRoom, threePlayers);
-
-      expect(result.gameState.current_bet).toBe(0);
     });
 
     it('should set button to first seat when button is null', () => {
@@ -218,11 +200,11 @@ describe('Deal Hand', () => {
       expect(result.gameState.hand_number).toBe(1); // room.current_hand_number + 1
     });
 
-    it('should set min raise to ante (falls back to big blind when ante is 0)', () => {
+    it('should set min raise to big blind (ante)', () => {
       const result = dealHand(standardRoom, threePlayers);
 
       // Ante drives the opening stake size in bomb pots
-      expect(result.gameState.min_raise).toBe(5); // standardRoom.bomb_pot_ante
+      expect(result.gameState.min_raise).toBe(5); // standardRoom.big_blind
     });
 
     it('should initialize action tracking fields', () => {

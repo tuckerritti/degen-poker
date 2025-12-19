@@ -37,18 +37,18 @@ export default function Home() {
 
   const [smallBlind, setSmallBlind] = useState(5);
   const [bigBlind, setBigBlind] = useState(10);
-  const [bombPotAnte, setBombPotAnte] = useState(20);
+  const [ploAnte, setPloAnte] = useState(20);
   const [minBuyIn, setMinBuyIn] = useState(200);
   const [maxBuyIn, setMaxBuyIn] = useState(1000);
 
   // Keep buy-in bounds aligned with the active stake type (blinds for Hold'em, ante for PLO)
   useEffect(() => {
-    const stake = selectedMode === "texas_holdem" ? bigBlind : bombPotAnte;
+    const stake = selectedMode === "texas_holdem" ? bigBlind : ploAnte;
     const floor = Math.max(1, stake * 20);
 
     setMinBuyIn((prev) => (prev < floor ? floor : prev));
     setMaxBuyIn((prev) => (prev < floor ? floor : prev));
-  }, [selectedMode, bigBlind, bombPotAnte]);
+  }, [selectedMode, bigBlind, ploAnte]);
 
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,9 +64,6 @@ export default function Home() {
     setIsCreating(true);
 
     try {
-      const isPLO = selectedMode === "double_board_bomb_pot_plo";
-      const isHoldem = selectedMode === "texas_holdem";
-
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_ENGINE_URL.replace(/\/+$/, "")}/rooms`,
         {
@@ -76,14 +73,12 @@ export default function Home() {
           ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify({
-          // Bomb pot PLO is ante-only; blinds are set to (0, ante) to satisfy engine schema
-          smallBlind: isPLO ? 0 : smallBlind,
-          bigBlind: isPLO ? bombPotAnte : bigBlind,
+          // PLO bomb pots: big blind value is the ante; SB set to 0
+          smallBlind: selectedMode === "double_board_bomb_pot_plo" ? 0 : smallBlind,
+          bigBlind: selectedMode === "double_board_bomb_pot_plo" ? ploAnte : bigBlind,
           minBuyIn,
           maxBuyIn,
           gameMode: selectedMode,
-          ...(isPLO && { bombPotAnte }),
-          ...(isHoldem && { bombPotAnte: 0 }),
           ownerAuthUserId: sessionId,
         }),
         },
@@ -204,15 +199,15 @@ export default function Home() {
                 </label>
                 <input
                   type="number"
-                  value={bombPotAnte}
-                  onChange={(e) => setBombPotAnte(Number(e.target.value))}
+                  value={ploAnte}
+                  onChange={(e) => setPloAnte(Number(e.target.value))}
                   className="mt-1 block w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-cream-parchment shadow-sm focus:border-whiskey-gold focus:outline-none focus:ring-1 focus:ring-whiskey-gold backdrop-blur-sm"
                   style={{ fontFamily: "Roboto Mono, monospace" }}
                   min={1}
                   required
                 />
                 <p className="mt-1 text-xs text-cigar-ash" style={{ fontFamily: "Lato, sans-serif" }}>
-                  Ante-only bomb pot (no blinds collected).
+                  Ante-only bomb pot (big blind value is the ante; small blind is 0).
                 </p>
               </div>
             )}
@@ -231,7 +226,7 @@ export default function Home() {
                   onChange={(e) => setMinBuyIn(Number(e.target.value))}
                   className="mt-1 block w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-cream-parchment shadow-sm focus:border-whiskey-gold focus:outline-none focus:ring-1 focus:ring-whiskey-gold backdrop-blur-sm"
                   style={{ fontFamily: "Roboto Mono, monospace" }}
-                  min={(selectedMode === "texas_holdem" ? bigBlind : bombPotAnte) * 20}
+                  min={(selectedMode === "texas_holdem" ? bigBlind : ploAnte) * 20}
                   required
                 />
               </div>

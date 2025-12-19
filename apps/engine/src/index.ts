@@ -41,13 +41,12 @@ async function requireUser(req: Request, res: Response): Promise<string | null> 
 }
 
 const createRoomSchema = z.object({
-  // Bomb pots are ante-only; blinds are optional and derived when omitted.
-  smallBlind: z.number().int().positive().optional(),
-  bigBlind: z.number().int().positive().optional(),
+  // For PLO bomb pots, big blind acts as the ante; small blind may be 0.
+  smallBlind: z.number().int().nonnegative().optional(),
+  bigBlind: z.number().int().positive(),
   minBuyIn: z.number().int().positive(),
   maxBuyIn: z.number().int().positive(),
   maxPlayers: z.number().int().min(2).max(10).optional(),
-  bombPotAnte: z.number().int().min(1, "bombPotAnte must be at least 1"),
   interHandDelay: z.number().int().min(0).optional(),
   pauseAfterHand: z.boolean().optional(),
   gameMode: z.enum(["double_board_bomb_pot_plo", "texas_holdem"]).optional(),
@@ -89,27 +88,31 @@ app.post("/rooms", async (req: Request, res: Response) => {
 
     const payload = createRoomSchema.parse(req.body);
 
-    // Derive blinds from ante when not supplied; blinds remain stored for min-raise math
-    const effectiveBigBlind = payload.bigBlind ?? Math.max(payload.bombPotAnte, 2);
-    let effectiveSmallBlind =
-      payload.smallBlind ?? Math.max(1, Math.min(effectiveBigBlind - 1, Math.floor(effectiveBigBlind / 2)));
+    const gameMode = payload.gameMode ?? "double_board_bomb_pot_plo";
+    const isHoldem = gameMode === "texas_holdem";
 
-    if (effectiveSmallBlind >= effectiveBigBlind) {
-      effectiveSmallBlind = Math.max(1, effectiveBigBlind - 1);
+    const effectiveBigBlind = payload.bigBlind;
+    let effectiveSmallBlind: number;
+
+    if (isHoldem) {
+      effectiveSmallBlind =
+        payload.smallBlind ?? Math.max(1, Math.min(effectiveBigBlind - 1, Math.floor(effectiveBigBlind / 2)));
+      if (effectiveSmallBlind <= 0) {
+        return res.status(400).json({ error: "smallBlind must be >= 1 for Texas Hold'em" });
+      }
+      if (effectiveBigBlind <= effectiveSmallBlind) {
+        return res.status(400).json({ error: "bigBlind must be greater than smallBlind" });
+      }
+    } else {
+      // Bomb pot PLO: BB doubles as ante; SB is optional and can be 0
+      effectiveSmallBlind = payload.smallBlind ?? 0;
+      if (effectiveBigBlind <= effectiveSmallBlind) {
+        effectiveSmallBlind = 0; // keep DB constraint big_blind > small_blind
+      }
     }
 
     if (payload.maxBuyIn < payload.minBuyIn) {
       return res.status(400).json({ error: "maxBuyIn must be >= minBuyIn" });
-    }
-    if (effectiveBigBlind <= effectiveSmallBlind) {
-      return res.status(400).json({ error: "bigBlind must be greater than smallBlind" });
-    }
-
-    const gameMode = payload.gameMode ?? "double_board_bomb_pot_plo";
-
-    // Validate game mode specific constraints
-    if (gameMode === "texas_holdem" && (payload.bombPotAnte ?? 0) > 0) {
-      return res.status(400).json({ error: "Texas Hold'em does not support bomb pot antes" });
     }
 
     const { data, error } = await supabase
@@ -120,7 +123,6 @@ app.post("/rooms", async (req: Request, res: Response) => {
         min_buy_in: payload.minBuyIn,
         max_buy_in: payload.maxBuyIn,
         max_players: payload.maxPlayers ?? 9,
-        bomb_pot_ante: payload.bombPotAnte,
         inter_hand_delay: payload.interHandDelay ?? 5,
         pause_after_hand: payload.pauseAfterHand ?? false,
         game_mode: gameMode,
