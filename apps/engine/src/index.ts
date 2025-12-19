@@ -294,7 +294,9 @@ app.post("/rooms/:roomId/start-hand", async (req: Request, res: Response) => {
     updatedPlayers,
     fullBoard1,
     fullBoard2,
+    fullBoard3,
     deckSeed,
+    usesTwoDecks,
   } = dealHand(room as Room, players as RoomPlayer[]);
 
   let createdGameStateId: string | null = null;
@@ -314,8 +316,18 @@ app.post("/rooms/:roomId/start-hand", async (req: Request, res: Response) => {
         deck_seed: deckSeed,
         full_board1: fullBoard1,
         full_board2: fullBoard2.length > 0 ? fullBoard2 : null,
+        full_board3: fullBoard3 && fullBoard3.length > 0 ? fullBoard3 : null,
       });
     if (secretErr) throw secretErr;
+
+    // Update room with two-deck metadata if needed
+    if (usesTwoDecks) {
+      const { error: roomUpdateErr } = await supabase
+        .from("rooms")
+        .update({ uses_two_decks: true })
+        .eq("id", roomId);
+      if (roomUpdateErr) throw roomUpdateErr;
+    }
 
     if (playerHands.length) {
       const { error: phErr } = await supabase.from("player_hands").insert(
@@ -493,6 +505,7 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
         gameState: gameState as GameStateRow,
         fullBoard1: secret.full_board1,
         fullBoard2: secret.full_board2,
+        fullBoard3: secret.full_board3 ?? undefined,
       },
       payload.seatNumber,
       payload.actionType as ActionType,

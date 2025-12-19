@@ -18,6 +18,7 @@ export const GAME_PHASES = [
   "flop",
   "turn",
   "river",
+  "partition",
   "showdown",
   "complete",
 ] as const;
@@ -26,6 +27,7 @@ export type GamePhase = (typeof GAME_PHASES)[number];
 export const GAME_MODES = [
   "double_board_bomb_pot_plo",
   "texas_holdem",
+  "game_mode_321",
 ] as const;
 export type GameMode = (typeof GAME_MODES)[number];
 
@@ -69,4 +71,19 @@ export interface ActionHistoryItem {
   action_type: ActionType;
   amount?: number;
   timestamp: string;
+}
+
+export interface PartitionSubmissionPayload {
+  roomId: string;
+  seatNumber: number;
+  threeBoardCards: string[];  // 3 cards for 3-board
+  twoBoardCards: string[];    // 2 cards for 2-board (PLO)
+  oneBoardCard: string[];     // 1 card for 1-board
+  authUserId?: string | null;
+}
+
+export interface BoardState {
+  board1?: string[];
+  board2?: string[];
+  board3?: string[];  // For 321 mode
 }

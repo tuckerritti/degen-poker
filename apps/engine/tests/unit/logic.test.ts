@@ -188,24 +188,32 @@ describe("Button and Action Order Logic", () => {
   });
 
   describe("advancePhase", () => {
-    it("should advance from flop to turn", () => {
-      expect(advancePhase("flop")).toBe("turn");
+    it("should advance from flop to turn (PLO)", () => {
+      expect(advancePhase("flop", "double_board_bomb_pot_plo")).toBe("turn");
     });
 
-    it("should advance from turn to river", () => {
-      expect(advancePhase("turn")).toBe("river");
+    it("should advance from turn to river (PLO)", () => {
+      expect(advancePhase("turn", "double_board_bomb_pot_plo")).toBe("river");
     });
 
-    it("should advance from river to showdown", () => {
-      expect(advancePhase("river")).toBe("showdown");
+    it("should advance from river to showdown (PLO)", () => {
+      expect(advancePhase("river", "double_board_bomb_pot_plo")).toBe("showdown");
     });
 
-    it("should advance from showdown to complete", () => {
-      expect(advancePhase("showdown")).toBe("complete");
+    it("should advance from showdown to complete (PLO)", () => {
+      expect(advancePhase("showdown", "double_board_bomb_pot_plo")).toBe("complete");
     });
 
-    it("should stay at complete", () => {
-      expect(advancePhase("complete")).toBe("complete");
+    it("should stay at complete (PLO)", () => {
+      expect(advancePhase("complete", "double_board_bomb_pot_plo")).toBe("complete");
+    });
+
+    it("should advance from river to partition (321)", () => {
+      expect(advancePhase("river", "game_mode_321")).toBe("partition");
+    });
+
+    it("should advance from partition to showdown (321)", () => {
+      expect(advancePhase("partition", "game_mode_321")).toBe("showdown");
     });
 
     it("should handle invalid phase by returning complete", () => {

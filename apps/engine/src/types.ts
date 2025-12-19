@@ -16,6 +16,7 @@ export interface Room {
   is_active: boolean;
   last_activity_at: string | null;
   owner_auth_user_id: string | null;
+  uses_two_decks: boolean;  // For 321 mode with many players
 }
 
 export interface RoomPlayer {
@@ -75,6 +76,7 @@ export interface GameStateSecret {
   deck_seed: string;
   full_board1: string[];
   full_board2: string[];
+  full_board3: string[] | null;  // For 321 mode
   created_at: string;
 }
 

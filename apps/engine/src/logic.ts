@@ -1,11 +1,12 @@
 import { randomBytes } from "crypto";
 import { ActionType, GamePhase } from "@poker/shared";
-import { shuffleDeck } from "./deck.js";
+import { shuffleDeck, shuffleDoubleDeck, needsTwoDecks } from "./deck.js";
 import type { GameStateRow, Room, RoomPlayer } from "./types.js";
 import {
   compare,
   evaluateOmaha,
   evaluateHoldem,
+  evaluate,
 } from "@poker-apprentice/hand-evaluator";
 
 export interface DealResult {
@@ -19,6 +20,8 @@ export interface DealResult {
   deckSeed: string;
   fullBoard1: string[];
   fullBoard2: string[];
+  fullBoard3?: string[];  // For 321 mode
+  usesTwoDecks: boolean;  // Indicates if two decks were used
 }
 
 export function nextButtonSeat(
@@ -159,14 +162,37 @@ export function postBlinds(
 export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
   // Generate a cryptographically strong, non-guessable seed and never expose it to clients
   const deckSeed = randomBytes(32).toString("hex");
-  const deck = shuffleDeck(deckSeed);
 
   const activePlayers = players.filter(
     (p) => !p.is_spectating && !p.is_sitting_out && p.chip_stack > 0,
   );
 
+  // Determine game mode configuration
   const isHoldem = room.game_mode === "texas_holdem";
-  const cardsPerPlayer = isHoldem ? 2 : 4;
+  const is321 = room.game_mode === "game_mode_321";
+
+  let cardsPerPlayer: number;
+  let totalBoardCards: number;
+
+  if (is321) {
+    cardsPerPlayer = 6;
+    totalBoardCards = 15; // 3 boards × 5 cards
+  } else if (isHoldem) {
+    cardsPerPlayer = 2;
+    totalBoardCards = 5;
+  } else {
+    // Default to PLO
+    cardsPerPlayer = 4;
+    totalBoardCards = 10; // 2 boards × 5 cards
+  }
+
+  // Check if two decks are needed and shuffle accordingly
+  const usesTwoDecks = needsTwoDecks(
+    activePlayers.length,
+    cardsPerPlayer,
+    totalBoardCards,
+  );
+  const deck = usesTwoDecks ? shuffleDoubleDeck(deckSeed) : shuffleDeck(deckSeed);
 
   // Deal hole cards
   let cursor = 0;
@@ -179,7 +205,19 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
   // Deal boards
   const board1 = deck.slice(cursor, cursor + 5);
   cursor += 5;
-  const board2 = isHoldem ? [] : deck.slice(cursor, cursor + 5);
+  let board2: string[];
+  let board3: string[] | undefined;
+
+  if (is321) {
+    board2 = deck.slice(cursor, cursor + 5);
+    cursor += 5;
+    board3 = deck.slice(cursor, cursor + 5);
+  } else if (isHoldem) {
+    board2 = [];
+  } else {
+    board2 = deck.slice(cursor, cursor + 5);
+  }
+
   const buttonSeat = nextButtonSeat(activePlayers, room.button_seat);
   let updatedPlayers: Partial<RoomPlayer>[] = [];
   let totalPot = 0;
@@ -249,9 +287,23 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
   }
 
   const initialPhase = isHoldem ? "preflop" : "flop";
-  const initialBoardState = isHoldem
-    ? { board1: [], board2: [] } // No cards shown preflop
-    : { board1: board1.slice(0, 3), board2: board2.slice(0, 3) }; // Show 3 cards on flop for PLO
+
+  // Build board state based on game mode
+  let initialBoardState: any;
+  if (isHoldem) {
+    initialBoardState = { board1: [], board2: [] }; // No cards shown preflop
+  } else if (is321) {
+    initialBoardState = {
+      board1: board1.slice(0, 3),
+      board2: board2.slice(0, 3),
+      board3: board3!.slice(0, 3),
+    }; // Show 3 cards on each of 3 boards for 321
+  } else {
+    initialBoardState = {
+      board1: board1.slice(0, 3),
+      board2: board2.slice(0, 3),
+    }; // Show 3 cards on flop for PLO
+  }
 
   const gameState: Partial<GameStateRow> = {
     room_id: room.id,
@@ -282,6 +334,8 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
     deckSeed,
     fullBoard1: board1,
     fullBoard2: board2,
+    fullBoard3: board3,
+    usesTwoDecks,
   };
 }
 
@@ -291,6 +345,7 @@ export interface ActionContext {
   gameState: GameStateRow;
   fullBoard1: string[];
   fullBoard2: string[];
+  fullBoard3?: string[];  // For 321 mode
 }
 
 export interface ActionOutcome {
@@ -326,7 +381,7 @@ export function applyAction(
   actionType: ActionType,
   amount?: number,
 ): ActionOutcome {
-  const { gameState, players, room, fullBoard1, fullBoard2 } = ctx;
+  const { gameState, players, room, fullBoard1, fullBoard2, fullBoard3 } = ctx;
 
   if (
     gameState.current_actor_seat !== seatNumber &&
@@ -635,13 +690,13 @@ export function applyAction(
     }
 
     // advance phase
-    const nextPhase = advancePhase(phase);
+    const nextPhase = advancePhase(phase, room.game_mode);
     phase = nextPhase;
     seatsActed = [];
     seatsToAct = [];
     currentActor = null;
 
-    if (nextPhase !== "complete" && nextPhase !== "showdown") {
+    if (nextPhase !== "complete" && nextPhase !== "showdown" && nextPhase !== "partition") {
       // reset bets for the new street
       players.forEach((p) => {
         updatedPlayers.push({
@@ -673,46 +728,91 @@ export function applyAction(
       currentActor = seatsToAct[0] ?? null;
     }
 
+    // For partition phase in 321 mode, no current actor (waiting for all players to submit)
+    if (nextPhase === "partition") {
+      currentActor = null;
+      seatsToAct = [];
+    }
+
     // Reveal next community cards based on phase progression
     const updatedBoardState: {
       board1?: string[];
       board2?: string[];
+      board3?: string[];
       fullBoard1?: string[];
       fullBoard2?: string[];
+      fullBoard3?: string[];
     } = { ...boardState };
 
     const isHoldem = room.game_mode === "texas_holdem";
+    const is321 = room.game_mode === "game_mode_321";
 
     if (nextPhase === "flop") {
       // Flop: reveal 3 cards (only for Hold'em when transitioning from preflop)
       updatedBoardState.board1 = fullBoard1.slice(0, 3);
       updatedBoardState.board2 = isHoldem ? [] : fullBoard2.slice(0, 3);
+      if (is321 && fullBoard3) {
+        updatedBoardState.board3 = fullBoard3.slice(0, 3);
+      }
       if (!isHoldem) {
         updatedBoardState.fullBoard1 = fullBoard1;
         updatedBoardState.fullBoard2 = fullBoard2;
+        if (is321 && fullBoard3) {
+          updatedBoardState.fullBoard3 = fullBoard3;
+        }
       }
     } else if (nextPhase === "turn") {
       // Turn: reveal 4 cards
       updatedBoardState.board1 = fullBoard1.slice(0, 4);
       updatedBoardState.board2 = isHoldem ? [] : fullBoard2.slice(0, 4);
+      if (is321 && fullBoard3) {
+        updatedBoardState.board3 = fullBoard3.slice(0, 4);
+      }
       if (!isHoldem) {
         updatedBoardState.fullBoard1 = fullBoard1;
         updatedBoardState.fullBoard2 = fullBoard2;
+        if (is321 && fullBoard3) {
+          updatedBoardState.fullBoard3 = fullBoard3;
+        }
       }
     } else if (nextPhase === "river") {
       // River: reveal all 5 cards
       updatedBoardState.board1 = fullBoard1.slice(0, 5);
       updatedBoardState.board2 = isHoldem ? [] : fullBoard2.slice(0, 5);
+      if (is321 && fullBoard3) {
+        updatedBoardState.board3 = fullBoard3.slice(0, 5);
+      }
       if (!isHoldem) {
         updatedBoardState.fullBoard1 = fullBoard1;
         updatedBoardState.fullBoard2 = fullBoard2;
+        if (is321 && fullBoard3) {
+          updatedBoardState.fullBoard3 = fullBoard3;
+        }
+      }
+    } else if (nextPhase === "partition") {
+      // Partition phase (321 mode only): all boards fully revealed, waiting for partitions
+      updatedBoardState.board1 = fullBoard1.slice(0, 5);
+      updatedBoardState.board2 = fullBoard2.slice(0, 5);
+      if (fullBoard3) {
+        updatedBoardState.board3 = fullBoard3.slice(0, 5);
+      }
+      updatedBoardState.fullBoard1 = fullBoard1;
+      updatedBoardState.fullBoard2 = fullBoard2;
+      if (fullBoard3) {
+        updatedBoardState.fullBoard3 = fullBoard3;
       }
     } else if (nextPhase === "showdown" || nextPhase === "complete") {
       // Showdown: reveal all 5 cards
       updatedBoardState.board1 = fullBoard1.slice(0, 5);
       updatedBoardState.board2 = isHoldem ? [] : fullBoard2.slice(0, 5);
+      if (is321 && fullBoard3) {
+        updatedBoardState.board3 = fullBoard3.slice(0, 5);
+      }
       updatedBoardState.fullBoard1 = fullBoard1;
       updatedBoardState.fullBoard2 = fullBoard2;
+      if (is321 && fullBoard3) {
+        updatedBoardState.fullBoard3 = fullBoard3;
+      }
     }
 
     // When hand reaches showdown, determine winners
@@ -821,7 +921,23 @@ export function applyAction(
   };
 }
 
-export function advancePhase(current: GamePhase): GamePhase {
+export function advancePhase(current: GamePhase, gameMode: string): GamePhase {
+  // Different phase progression for 321 mode (includes partition phase)
+  if (gameMode === "game_mode_321") {
+    const order: GamePhase[] = [
+      "flop",
+      "turn",
+      "river",
+      "partition",
+      "showdown",
+      "complete",
+    ];
+    const idx = order.indexOf(current);
+    if (idx === -1 || idx === order.length - 1) return "complete";
+    return order[idx + 1];
+  }
+
+  // Standard progression for other modes
   const order: GamePhase[] = [
     "preflop",
     "flop",
@@ -988,6 +1104,118 @@ export function determineSingleBoardWinners(
 }
 
 /**
+ * Evaluate 3-board hand (standard 5-card poker with 3 hole + 5 board)
+ * Player can use any 5 cards from their 3 hole cards + 5 community cards
+ */
+function evaluate3BoardHand(
+  holeCards: string[],
+  board: string[],
+): { strength: number; hand: string[] } {
+  if (holeCards.length !== 3) return { strength: 0, hand: [] };
+  if (board.length !== 5) return { strength: 0, hand: [] };
+
+  // Combine all 8 cards and find best 5-card hand
+  const allCards = [...holeCards, ...board];
+
+  try {
+    const result = evaluate(allCards as unknown as Parameters<typeof evaluate>[0]);
+    return {
+      strength: result.strength,
+      hand: result.hand as unknown as string[],
+    };
+  } catch {
+    return { strength: 0, hand: [] };
+  }
+}
+
+/**
+ * Evaluate 1-board hand (exactly 1 hole + 4 board = 5 card hand)
+ * Creates a 5-card hand by combining the single hole card with best 4 from board
+ */
+function evaluate1BoardHand(
+  holeCards: string[],
+  board: string[],
+): { strength: number; hand: string[] } {
+  if (holeCards.length !== 1) return { strength: 0, hand: [] };
+  if (board.length !== 5) return { strength: 0, hand: [] };
+
+  let bestStrength = 0;
+  let bestHand: string[] = [];
+
+  // Try all C(5,4) = 5 combinations of 4 board cards
+  for (let i = 0; i < 5; i++) {
+    const fourBoardCards = board.filter((_, idx) => idx !== i);
+    const hand = [holeCards[0], ...fourBoardCards];
+
+    try {
+      const result = evaluate(hand as unknown as Parameters<typeof evaluate>[0]);
+      if (result.strength > bestStrength) {
+        bestStrength = result.strength;
+        bestHand = result.hand as unknown as string[];
+      }
+    } catch {
+      // Skip invalid combinations
+    }
+  }
+
+  return { strength: bestStrength, hand: bestHand };
+}
+
+/**
+ * Determine winners for 321 mode (3 boards, different evaluation rules)
+ * @param playerPartitions - Array of player partitions with allocated cards
+ * @param board1 - 3-board community cards
+ * @param board2 - 2-board community cards
+ * @param board3 - 1-board community cards
+ * @returns Winners for each board
+ */
+export function determine321Winners(
+  playerPartitions: Array<{
+    seatNumber: number;
+    threeBoardCards: string[];
+    twoBoardCards: string[];
+    oneBoardCard: string[];
+  }>,
+  board1: string[],
+  board2: string[],
+  board3: string[],
+): {
+  board1Winners: number[];
+  board2Winners: number[];
+  board3Winners: number[];
+} {
+  if (playerPartitions.length === 0) {
+    return { board1Winners: [], board2Winners: [], board3Winners: [] };
+  }
+
+  // Evaluate each player on all 3 boards with appropriate rules
+  const evaluations = playerPartitions.map((p) => ({
+    seatNumber: p.seatNumber,
+    board1: evaluate3BoardHand(p.threeBoardCards, board1), // 3-card holdem
+    board2: evaluatePlayerHand(p.twoBoardCards, board2), // PLO
+    board3: evaluate1BoardHand(p.oneBoardCard, board3), // 1+4 modified
+  }));
+
+  // Find winners for each board
+  const maxStrength1 = Math.max(...evaluations.map((e) => e.board1.strength));
+  const board1Winners = evaluations
+    .filter((e) => e.board1.strength === maxStrength1)
+    .map((e) => e.seatNumber);
+
+  const maxStrength2 = Math.max(...evaluations.map((e) => e.board2.strength));
+  const board2Winners = evaluations
+    .filter((e) => e.board2.strength === maxStrength2)
+    .map((e) => e.seatNumber);
+
+  const maxStrength3 = Math.max(...evaluations.map((e) => e.board3.strength));
+  const board3Winners = evaluations
+    .filter((e) => e.board3.strength === maxStrength3)
+    .map((e) => e.seatNumber);
+
+  return { board1Winners, board2Winners, board3Winners };
+}
+
+/**
  * Calculate side pots from players with different all-in amounts
  */
 export function calculateSidePots(
@@ -1099,6 +1327,72 @@ export function endOfHandPayout(
 
     distributeEven(halfPot, board1Seats, payouts);
     distributeEven(remainderPot, board2Seats, payouts);
+  });
+
+  return Array.from(payouts.entries()).map(([seat, amount]) => ({
+    seat,
+    amount,
+  }));
+}
+
+/**
+ * Distribute pot for 321 mode (3-way split)
+ * Each board gets 1/3 of each pot. Scoop = player wins all 3 boards.
+ */
+export function endOfHandPayout321(
+  sidePots: Array<{ amount: number; eligibleSeats: number[] }>,
+  board1Winners: number[],
+  board2Winners: number[],
+  board3Winners: number[],
+): { seat: number; amount: number }[] {
+  if (
+    board1Winners.length === 0 &&
+    board2Winners.length === 0 &&
+    board3Winners.length === 0
+  ) {
+    return [];
+  }
+
+  const payouts: Map<number, number> = new Map();
+  const potsToDistribute =
+    sidePots.length > 0
+      ? sidePots
+      : [
+          {
+            amount: 0,
+            eligibleSeats: Array.from(
+              new Set([...board1Winners, ...board2Winners, ...board3Winners]),
+            ),
+          },
+        ];
+
+  potsToDistribute.forEach((pot) => {
+    const eligibleBoard1 = board1Winners.filter((seat) =>
+      pot.eligibleSeats.includes(seat),
+    );
+    const eligibleBoard2 = board2Winners.filter((seat) =>
+      pot.eligibleSeats.includes(seat),
+    );
+    const eligibleBoard3 = board3Winners.filter((seat) =>
+      pot.eligibleSeats.includes(seat),
+    );
+
+    // Default to all eligible if no winners on a board
+    const board1Seats =
+      eligibleBoard1.length > 0 ? eligibleBoard1 : pot.eligibleSeats;
+    const board2Seats =
+      eligibleBoard2.length > 0 ? eligibleBoard2 : pot.eligibleSeats;
+    const board3Seats =
+      eligibleBoard3.length > 0 ? eligibleBoard3 : pot.eligibleSeats;
+
+    // Split pot into thirds (with rounding)
+    const third = Math.floor(pot.amount / 3);
+    const remainder = pot.amount - third * 3;
+
+    // Distribute each third
+    distributeEven(third, board1Seats, payouts);
+    distributeEven(third, board2Seats, payouts);
+    distributeEven(third + remainder, board3Seats, payouts); // Give remainder to board3
   });
 
   return Array.from(payouts.entries()).map(([seat, amount]) => ({
