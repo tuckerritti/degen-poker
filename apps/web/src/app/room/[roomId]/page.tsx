@@ -201,12 +201,57 @@ export default function RoomPage({
 
   const handleRebuy = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!myPlayer || !sessionId) return;
+    if (!myPlayer || !accessToken || !roomId) return;
+
+    // Validate rebuy amount
+    if (rebuyAmount <= 0) {
+      alert("Rebuy amount must be positive");
+      return;
+    }
+
+    const maxRebuy = room ? Math.max(0, room.max_buy_in - myPlayer.chip_stack) : 0;
+    if (maxRebuy <= 0) {
+      alert("You're already at the maximum buy-in");
+      return;
+    }
+    if (rebuyAmount > maxRebuy) {
+      alert(`Maximum rebuy amount is $${maxRebuy}`);
+      return;
+    }
 
     setIsRebuying(true);
 
-    alert("Rebuy is not yet supported via the engine.");
-    setIsRebuying(false);
+    try {
+      const response = await engineFetch(
+        `/rooms/${roomId}/rebuy`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            seatNumber: myPlayer.seat_number,
+            rebuyAmount: rebuyAmount,
+          }),
+        },
+        accessToken
+      );
+
+      if (!response.ok) {
+        const data = await response.json();
+        alert(data.error || "Failed to add chips");
+        return;
+      }
+
+      // Success - close modal and reset
+      setShowRebuyModal(false);
+      setRebuyAmount(100);
+
+      // Real-time subscription will update UI automatically
+    } catch (error) {
+      console.error("Error adding chips:", error);
+      alert("Failed to add chips");
+    } finally {
+      setIsRebuying(false);
+    }
   };
 
   const handleDealHand = async () => {

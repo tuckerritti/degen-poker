@@ -71,6 +71,11 @@ const ACTIONS = [
   "all_in",
 ] as const satisfies ActionType[];
 
+const rebuySchema = z.object({
+  seatNumber: z.number().int().min(0),
+  rebuyAmount: z.number().int().positive(),
+});
+
 const actionSchema = z.object({
   seatNumber: z.number().int(),
   actionType: z.enum(ACTIONS),
@@ -214,6 +219,80 @@ app.post("/rooms/:roomId/join", async (req: Request, res: Response) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     logger.error({ err }, "failed to join room");
+    res.status(400).json({ error: message });
+  }
+});
+
+app.post("/rooms/:roomId/rebuy", async (req: Request, res: Response) => {
+  try {
+    const userId = await requireUser(req, res);
+    if (!userId) return;
+
+    const roomId = req.params.roomId;
+    const payload = rebuySchema.parse(req.body);
+
+    const { data: room, error: roomErr } = await supabase
+      .from("rooms")
+      .select("*")
+      .eq("id", roomId)
+      .single();
+    if (roomErr || !room) return res.status(404).json({ error: "Room not found" });
+
+    const activeGame = await fetchLatestGameState(roomId);
+    if (activeGame) {
+      return res.status(400).json({ error: "Cannot rebuy during an active hand" });
+    }
+
+    const { data: player, error: playerErr } = await supabase
+      .from("room_players")
+      .select("*")
+      .eq("room_id", roomId)
+      .eq("seat_number", payload.seatNumber)
+      .maybeSingle();
+    if (playerErr) throw playerErr;
+    if (!player) return res.status(404).json({ error: "Player not found at this seat" });
+
+    if (player.auth_user_id && player.auth_user_id !== userId) {
+      return res.status(403).json({ error: "Not authorized to rebuy for this seat" });
+    }
+
+    const newChipStack = (player.chip_stack ?? 0) + payload.rebuyAmount;
+    const remainingAllowed = room.max_buy_in - (player.chip_stack ?? 0);
+    if (remainingAllowed <= 0) {
+      return res.status(400).json({ error: "Player is already at the maximum buy-in" });
+    }
+    if (newChipStack > room.max_buy_in) {
+      return res.status(400).json({
+        error: `Rebuy would exceed maximum buy-in of ${room.max_buy_in}`
+      });
+    }
+
+    const { data: updatedPlayers, error: updateErr } = await supabase
+      .from("room_players")
+      .update({
+        chip_stack: newChipStack,
+        total_buy_in: (player.total_buy_in ?? 0) + payload.rebuyAmount,
+        auth_user_id: player.auth_user_id ?? userId,
+      })
+      .eq("id", player.id)
+      .eq("chip_stack", player.chip_stack ?? 0)
+      .select();
+    if (updateErr) throw updateErr;
+
+    const updatedPlayer = updatedPlayers?.[0];
+    if (!updatedPlayer) {
+      return res.status(409).json({ error: "Rebuy failed due to concurrent update, please try again" });
+    }
+
+    await supabase
+      .from("rooms")
+      .update({ last_activity_at: new Date().toISOString() })
+      .eq("id", roomId);
+
+    res.status(200).json({ player: updatedPlayer });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    logger.error({ err }, "failed to process rebuy");
     res.status(400).json({ error: message });
   }
 });
