@@ -11,7 +11,9 @@ export async function insertGameStateSecret(params: {
   if (error) throw error;
 }
 
-export async function fetchGameStateSecret(game_state_id: string): Promise<GameStateSecret | null> {
+export async function fetchGameStateSecret(
+  game_state_id: string,
+): Promise<GameStateSecret | null> {
   const { data, error } = await supabase
     .from("game_state_secrets")
     .select("*")

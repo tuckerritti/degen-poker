@@ -4,7 +4,14 @@ import { z } from "zod";
 import { port, corsOrigin } from "./env.js";
 import { logger } from "./logger.js";
 import { supabase } from "./supabase.js";
-import { dealHand, applyAction, endOfHandPayout, determineDoubleBoardWinners, determineSingleBoardWinners, calculateSidePots } from "./logic.js";
+import {
+  dealHand,
+  applyAction,
+  endOfHandPayout,
+  determineDoubleBoardWinners,
+  determineSingleBoardWinners,
+  calculateSidePots,
+} from "./logic.js";
 import type { GameStateRow, Room, RoomPlayer, SidePot } from "./types.js";
 import { ActionType } from "@poker/shared";
 import { fetchGameStateSecret } from "./secrets.js";
@@ -20,7 +27,9 @@ app.use(
 app.use(express.json());
 
 async function getUserId(req: Request): Promise<string | null> {
-  const authHeader = (req.headers.authorization ?? req.headers.Authorization ?? "") as string;
+  const authHeader = (req.headers.authorization ??
+    req.headers.Authorization ??
+    "") as string;
   if (!authHeader || !authHeader.toLowerCase().startsWith("bearer ")) {
     return null;
   }
@@ -31,10 +40,15 @@ async function getUserId(req: Request): Promise<string | null> {
   return data.user.id;
 }
 
-async function requireUser(req: Request, res: Response): Promise<string | null> {
+async function requireUser(
+  req: Request,
+  res: Response,
+): Promise<string | null> {
   const userId = await getUserId(req);
   if (!userId) {
-    res.status(401).json({ error: "Unauthorized: missing or invalid bearer token" });
+    res
+      .status(401)
+      .json({ error: "Unauthorized: missing or invalid bearer token" });
     return null;
   }
   return userId;
@@ -96,12 +110,20 @@ app.post("/rooms", async (req: Request, res: Response) => {
 
     if (isHoldem) {
       effectiveSmallBlind =
-        payload.smallBlind ?? Math.max(1, Math.min(effectiveBigBlind - 1, Math.floor(effectiveBigBlind / 2)));
+        payload.smallBlind ??
+        Math.max(
+          1,
+          Math.min(effectiveBigBlind - 1, Math.floor(effectiveBigBlind / 2)),
+        );
       if (effectiveSmallBlind <= 0) {
-        return res.status(400).json({ error: "smallBlind must be >= 1 for Texas Hold'em" });
+        return res
+          .status(400)
+          .json({ error: "smallBlind must be >= 1 for Texas Hold'em" });
       }
       if (effectiveBigBlind <= effectiveSmallBlind) {
-        return res.status(400).json({ error: "bigBlind must be greater than smallBlind" });
+        return res
+          .status(400)
+          .json({ error: "bigBlind must be greater than smallBlind" });
       }
     } else {
       // Bomb pot PLO: BB doubles as ante; SB is optional and can be 0
@@ -154,14 +176,17 @@ app.post("/rooms/:roomId/join", async (req: Request, res: Response) => {
       .select("*")
       .eq("id", roomId)
       .single();
-    if (roomErr || !room) return res.status(404).json({ error: "Room not found" });
+    if (roomErr || !room)
+      return res.status(404).json({ error: "Room not found" });
 
     if (payload.buyIn < room.min_buy_in || payload.buyIn > room.max_buy_in) {
       return res.status(400).json({ error: "Buy-in out of range" });
     }
 
     if (payload.seatNumber >= room.max_players) {
-      return res.status(400).json({ error: "Seat number exceeds table capacity" });
+      return res
+        .status(400)
+        .json({ error: "Seat number exceeds table capacity" });
     }
 
     const { data: seatedByUser } = await supabase
@@ -171,7 +196,9 @@ app.post("/rooms/:roomId/join", async (req: Request, res: Response) => {
       .eq("auth_user_id", userId)
       .maybeSingle();
     if (seatedByUser) {
-      return res.status(400).json({ error: "You are already seated at this table" });
+      return res
+        .status(400)
+        .json({ error: "You are already seated at this table" });
     }
 
     const { count: currentPlayers } = await supabase
@@ -234,7 +261,9 @@ app.post("/rooms/:roomId/start-hand", async (req: Request, res: Response) => {
   }
 
   if (room.owner_auth_user_id && room.owner_auth_user_id !== userId) {
-    return res.status(403).json({ error: "Only the room owner can deal the next hand" });
+    return res
+      .status(403)
+      .json({ error: "Only the room owner can deal the next hand" });
   }
 
   if (!room.owner_auth_user_id) {
@@ -254,13 +283,19 @@ app.post("/rooms/:roomId/start-hand", async (req: Request, res: Response) => {
 
   const players = await fetchPlayers(roomId);
   if (players.length < 2) {
-    return res.status(400).json({ error: "Need at least two players to start" });
+    return res
+      .status(400)
+      .json({ error: "Need at least two players to start" });
   }
 
-  const { gameState, playerHands, updatedPlayers, fullBoard1, fullBoard2, deckSeed } = dealHand(
-    room as Room,
-    players as RoomPlayer[],
-  );
+  const {
+    gameState,
+    playerHands,
+    updatedPlayers,
+    fullBoard1,
+    fullBoard2,
+    deckSeed,
+  } = dealHand(room as Room, players as RoomPlayer[]);
 
   let createdGameStateId: string | null = null;
   try {
@@ -272,12 +307,14 @@ app.post("/rooms/:roomId/start-hand", async (req: Request, res: Response) => {
     if (gsErr) throw gsErr;
     createdGameStateId = gs.id;
 
-    const { error: secretErr } = await supabase.from("game_state_secrets").insert({
-      game_state_id: gs.id,
-      deck_seed: deckSeed,
-      full_board1: fullBoard1,
-      full_board2: fullBoard2.length > 0 ? fullBoard2 : null,
-    });
+    const { error: secretErr } = await supabase
+      .from("game_state_secrets")
+      .insert({
+        game_state_id: gs.id,
+        deck_seed: deckSeed,
+        full_board1: fullBoard1,
+        full_board2: fullBoard2.length > 0 ? fullBoard2 : null,
+      });
     if (secretErr) throw secretErr;
 
     if (playerHands.length) {
@@ -294,7 +331,9 @@ app.post("/rooms/:roomId/start-hand", async (req: Request, res: Response) => {
     }
 
     if (updatedPlayers.length) {
-      const { error: upErr } = await supabase.from("room_players").upsert(updatedPlayers);
+      const { error: upErr } = await supabase
+        .from("room_players")
+        .upsert(updatedPlayers);
       if (upErr) throw upErr;
     }
 
@@ -310,8 +349,14 @@ app.post("/rooms/:roomId/start-hand", async (req: Request, res: Response) => {
     res.status(201).json({ gameState: gs });
   } catch (err) {
     if (createdGameStateId) {
-      await supabase.from("player_hands").delete().eq("game_state_id", createdGameStateId);
-      await supabase.from("game_state_secrets").delete().eq("game_state_id", createdGameStateId);
+      await supabase
+        .from("player_hands")
+        .delete()
+        .eq("game_state_id", createdGameStateId);
+      await supabase
+        .from("game_state_secrets")
+        .delete()
+        .eq("game_state_id", createdGameStateId);
       await supabase.from("game_states").delete().eq("id", createdGameStateId);
     }
     const message = err instanceof Error ? err.message : "Unknown error";
@@ -336,12 +381,18 @@ app.patch("/rooms/:roomId/pause", async (req: Request, res: Response) => {
     // Authorization: Only room owner can pause/unpause
     // Note: If owner_auth_user_id is null (anonymous room), any authenticated user can pause
     if (room.owner_auth_user_id && room.owner_auth_user_id !== userId) {
-      return res.status(403).json({ error: "Only the room owner can pause/unpause" });
+      return res
+        .status(403)
+        .json({ error: "Only the room owner can pause/unpause" });
     }
 
     const gameState = await fetchLatestGameState(roomId);
 
-    let updates: { is_paused?: boolean; pause_after_hand?: boolean; last_activity_at: string };
+    let updates: {
+      is_paused?: boolean;
+      pause_after_hand?: boolean;
+      last_activity_at: string;
+    };
     let pauseScheduled = false;
 
     if (room.is_paused) {
@@ -405,10 +456,14 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
     if (!secret) return res.status(500).json({ error: "Missing game secrets" });
 
     const players = await fetchPlayers(roomId);
-    const actingPlayer = players.find((p) => p.seat_number === payload.seatNumber);
+    const actingPlayer = players.find(
+      (p) => p.seat_number === payload.seatNumber,
+    );
     if (!actingPlayer) return res.status(404).json({ error: "Seat not found" });
     if (actingPlayer.auth_user_id && actingPlayer.auth_user_id !== userId) {
-      return res.status(403).json({ error: "You are not authorized to act for this seat" });
+      return res
+        .status(403)
+        .json({ error: "You are not authorized to act for this seat" });
     }
     if (!actingPlayer.auth_user_id) {
       await supabase
@@ -444,20 +499,18 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
       payload.amount,
     );
 
-    await supabase
-      .from("player_actions")
-      .insert({
-        room_id: roomId,
-        game_state_id: gameState.id,
-        seat_number: payload.seatNumber,
-        action_type: payload.actionType,
-        amount: payload.amount ?? null,
-        processed: outcome.error ? false : true,
-        processed_at: outcome.error ? null : new Date().toISOString(),
-        error_message: outcome.error ?? null,
-        auth_user_id: userId,
-        idempotency_key: payload.idempotencyKey ?? null,
-      });
+    await supabase.from("player_actions").insert({
+      room_id: roomId,
+      game_state_id: gameState.id,
+      seat_number: payload.seatNumber,
+      action_type: payload.actionType,
+      amount: payload.amount ?? null,
+      processed: outcome.error ? false : true,
+      processed_at: outcome.error ? null : new Date().toISOString(),
+      error_message: outcome.error ?? null,
+      auth_user_id: userId,
+      idempotency_key: payload.idempotencyKey ?? null,
+    });
 
     if (outcome.error) {
       return res.status(400).json({ error: outcome.error });
@@ -475,7 +528,9 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
       });
       const deduplicatedPlayers = Array.from(playerMap.values());
 
-      const { error: upErr } = await supabase.from("room_players").upsert(deduplicatedPlayers);
+      const { error: upErr } = await supabase
+        .from("room_players")
+        .upsert(deduplicatedPlayers);
       if (upErr) throw upErr;
     }
 
@@ -518,14 +573,18 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
         const isHoldem = (room as Room).game_mode === "texas_holdem";
 
         const activeHands = (playerHands || [])
-          .filter((ph) => activePlayers.some((p) => p.seat_number === ph.seat_number))
+          .filter((ph) =>
+            activePlayers.some((p) => p.seat_number === ph.seat_number),
+          )
           .map((ph) => ({
             seatNumber: ph.seat_number,
             cards: ph.cards as unknown as string[],
           }));
 
         // Reuse side pots from applyAction outcome instead of recalculating
-        const sidePots = outcome.updatedGameState.side_pots as SidePot[] ?? calculateSidePots(mergedPlayers);
+        const sidePots =
+          (outcome.updatedGameState.side_pots as SidePot[]) ??
+          calculateSidePots(mergedPlayers);
 
         if (isHoldem) {
           // Texas Hold'em: single board winner determination
@@ -546,7 +605,9 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
       if (payouts.length) {
         const creditUpdates = payouts
           .map((p) => {
-            const player = mergedPlayers.find((pl) => pl.seat_number === p.seat);
+            const player = mergedPlayers.find(
+              (pl) => pl.seat_number === p.seat,
+            );
             return player
               ? {
                   id: player.id,
@@ -561,7 +622,9 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
           })
           .filter(Boolean) as Partial<RoomPlayer>[];
         if (creditUpdates.length) {
-          const { error: creditErr } = await supabase.from("room_players").upsert(creditUpdates);
+          const { error: creditErr } = await supabase
+            .from("room_players")
+            .upsert(creditUpdates);
           if (creditErr) throw creditErr;
         }
 
@@ -574,7 +637,8 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
           (p) => !p.is_spectating && !p.is_sitting_out,
         );
         const withChips = activeSeated.filter((p) => (p.chip_stack ?? 0) > 0);
-        const shouldAutoPause = activeSeated.length === 2 && withChips.length === 1;
+        const shouldAutoPause =
+          activeSeated.length === 2 && withChips.length === 1;
 
         // Pause if: (1) heads-up bust, or (2) pause_after_hand flag is set
         if (shouldAutoPause || room.pause_after_hand) {
@@ -589,9 +653,10 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
           if (pauseErr) throw pauseErr;
         }
       }
-      const boardState = (gameState.board_state ?? null) as
-        | { board1?: string[]; board2?: string[] }
-        | null;
+      const boardState = (gameState.board_state ?? null) as {
+        board1?: string[];
+        board2?: string[];
+      } | null;
 
       const allWinners = payouts.map((p) => p.seat);
 
@@ -602,7 +667,8 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
         board_a: boardState?.board1 ?? null,
         board_b: boardState?.board2 ?? null,
         winners: allWinners,
-        action_history: outcome.updatedGameState.action_history ?? gameState.action_history,
+        action_history:
+          outcome.updatedGameState.action_history ?? gameState.action_history,
         shown_hands: null,
       });
       if (resultsErr) throw resultsErr;
@@ -631,7 +697,10 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
     if (outcome.handCompleted) {
       res.json({ ok: true });
     } else {
-      res.json({ ok: true, gameState: { ...gameState, ...outcome.updatedGameState } });
+      res.json({
+        ok: true,
+        gameState: { ...gameState, ...outcome.updatedGameState },
+      });
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
@@ -641,7 +710,11 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
 });
 
 async function fetchRoom(roomId: string): Promise<Room | null> {
-  const { data, error } = await supabase.from("rooms").select("*").eq("id", roomId).maybeSingle();
+  const { data, error } = await supabase
+    .from("rooms")
+    .select("*")
+    .eq("id", roomId)
+    .maybeSingle();
   if (error) throw error;
   return data as Room | null;
 }
@@ -656,7 +729,9 @@ async function fetchPlayers(roomId: string): Promise<RoomPlayer[]> {
   return (data ?? []) as RoomPlayer[];
 }
 
-async function fetchLatestGameState(roomId: string): Promise<GameStateRow | null> {
+async function fetchLatestGameState(
+  roomId: string,
+): Promise<GameStateRow | null> {
   const { data, error } = await supabase
     .from("game_states")
     .select("*")

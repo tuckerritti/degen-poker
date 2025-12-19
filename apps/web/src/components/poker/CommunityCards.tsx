@@ -1,5 +1,8 @@
 import { Card } from "./Card";
-import { evaluatePLOHandPartial, evaluateHoldemHandPartial } from "@/lib/poker/hand-evaluator";
+import {
+  evaluatePLOHandPartial,
+  evaluateHoldemHandPartial,
+} from "@/lib/poker/hand-evaluator";
 
 interface CommunityCardsProps {
   boardA: string[];

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from "vitest";
 
 /**
  * Unit tests for game state secrets management
@@ -10,9 +10,9 @@ import { describe, it, expect } from 'vitest';
  * 3. Verify error handling for database failures
  */
 
-describe('Game State Secrets', () => {
-  describe('insertGameStateSecret', () => {
-    it('should insert secret with deck seed and boards', () => {
+describe("Game State Secrets", () => {
+  describe("insertGameStateSecret", () => {
+    it("should insert secret with deck seed and boards", () => {
       // Mock structure:
       // - Mock Supabase insert operation
       // - Call insertGameStateSecret with gameStateId, deckSeed, fullBoard1, fullBoard2
@@ -22,7 +22,7 @@ describe('Game State Secrets', () => {
       expect(true).toBe(true); // Placeholder
     });
 
-    it('should handle single board for Hold\'em (empty board2)', () => {
+    it("should handle single board for Hold'em (empty board2)", () => {
       // Mock structure:
       // - Call insertGameStateSecret with empty fullBoard2
       // - Verify full_board2 is stored as empty array or null
@@ -30,7 +30,7 @@ describe('Game State Secrets', () => {
       expect(true).toBe(true); // Placeholder
     });
 
-    it('should return inserted record', () => {
+    it("should return inserted record", () => {
       // Mock structure:
       // - Mock Supabase to return inserted record
       // - Call insertGameStateSecret
@@ -39,7 +39,7 @@ describe('Game State Secrets', () => {
       expect(true).toBe(true); // Placeholder
     });
 
-    it('should handle database insert errors', () => {
+    it("should handle database insert errors", () => {
       // Mock structure:
       // - Mock Supabase to return error
       // - Call insertGameStateSecret
@@ -48,7 +48,7 @@ describe('Game State Secrets', () => {
       expect(true).toBe(true); // Placeholder
     });
 
-    it('should store deck seed as string', () => {
+    it("should store deck seed as string", () => {
       // Mock structure:
       // - Call insertGameStateSecret with hex string seed
       // - Verify seed stored as string type (not buffer)
@@ -56,7 +56,7 @@ describe('Game State Secrets', () => {
       expect(true).toBe(true); // Placeholder
     });
 
-    it('should store boards as JSONB arrays', () => {
+    it("should store boards as JSONB arrays", () => {
       // Mock structure:
       // - Call insertGameStateSecret with board arrays
       // - Verify boards stored as JSONB (array of strings)
@@ -65,8 +65,8 @@ describe('Game State Secrets', () => {
     });
   });
 
-  describe('fetchGameStateSecret', () => {
-    it('should fetch secret by game state ID', () => {
+  describe("fetchGameStateSecret", () => {
+    it("should fetch secret by game state ID", () => {
       // Mock structure:
       // - Mock Supabase select with .eq('game_state_id', id).single()
       // - Call fetchGameStateSecret with game state ID
@@ -76,7 +76,7 @@ describe('Game State Secrets', () => {
       expect(true).toBe(true); // Placeholder
     });
 
-    it('should return null when secret not found', () => {
+    it("should return null when secret not found", () => {
       // Mock structure:
       // - Mock Supabase to return null/error
       // - Call fetchGameStateSecret with non-existent ID
@@ -85,7 +85,7 @@ describe('Game State Secrets', () => {
       expect(true).toBe(true); // Placeholder
     });
 
-    it('should handle database fetch errors', () => {
+    it("should handle database fetch errors", () => {
       // Mock structure:
       // - Mock Supabase to throw error
       // - Call fetchGameStateSecret
@@ -94,7 +94,7 @@ describe('Game State Secrets', () => {
       expect(true).toBe(true); // Placeholder
     });
 
-    it('should parse JSONB boards correctly', () => {
+    it("should parse JSONB boards correctly", () => {
       // Mock structure:
       // - Mock Supabase to return record with JSONB boards
       // - Call fetchGameStateSecret
@@ -103,7 +103,7 @@ describe('Game State Secrets', () => {
       expect(true).toBe(true); // Placeholder
     });
 
-    it('should handle empty board2 for Hold\'em', () => {
+    it("should handle empty board2 for Hold'em", () => {
       // Mock structure:
       // - Mock Supabase to return secret with empty full_board2
       // - Call fetchGameStateSecret
@@ -113,8 +113,8 @@ describe('Game State Secrets', () => {
     });
   });
 
-  describe('RLS Policy Compliance', () => {
-    it('should only allow service role to insert secrets', () => {
+  describe("RLS Policy Compliance", () => {
+    it("should only allow service role to insert secrets", () => {
       // This test would verify the database RLS policy
       // In practice, this is tested at the database level
       // Here we document the expected behavior:
@@ -125,7 +125,7 @@ describe('Game State Secrets', () => {
       expect(true).toBe(true); // Placeholder
     });
 
-    it('should only allow service role to read secrets', () => {
+    it("should only allow service role to read secrets", () => {
       // This test would verify the database RLS policy
       // Expected behavior:
       // - Service role can select: YES
@@ -135,7 +135,7 @@ describe('Game State Secrets', () => {
       expect(true).toBe(true); // Placeholder
     });
 
-    it('should never expose deck seed to clients', () => {
+    it("should never expose deck seed to clients", () => {
       // This test verifies architectural guarantee:
       // - game_states table has deck_seed: "hidden"
       // - game_state_secrets table is only accessible via service role
@@ -145,8 +145,8 @@ describe('Game State Secrets', () => {
     });
   });
 
-  describe('Integration with dealHand', () => {
-    it('should store generated deck seed from dealHand', () => {
+  describe("Integration with dealHand", () => {
+    it("should store generated deck seed from dealHand", () => {
       // Mock structure:
       // - Call dealHand which generates a random seed
       // - Mock insertGameStateSecret
@@ -156,7 +156,7 @@ describe('Game State Secrets', () => {
       expect(true).toBe(true); // Placeholder
     });
 
-    it('should store full boards before revealing to players', () => {
+    it("should store full boards before revealing to players", () => {
       // Mock structure:
       // - Call dealHand
       // - Verify full 5-card boards stored in secrets
@@ -165,7 +165,7 @@ describe('Game State Secrets', () => {
       expect(true).toBe(true); // Placeholder
     });
 
-    it('should use same seed for deterministic shuffling', () => {
+    it("should use same seed for deterministic shuffling", () => {
       // Mock structure:
       // - Fetch seed from secrets
       // - Use seed to shuffle deck
@@ -176,8 +176,8 @@ describe('Game State Secrets', () => {
     });
   });
 
-  describe('Integration with applyAction (board reveals)', () => {
-    it('should fetch secret to reveal turn card', () => {
+  describe("Integration with applyAction (board reveals)", () => {
+    it("should fetch secret to reveal turn card", () => {
       // Mock structure:
       // - Mock game state on flop
       // - Action completes flop betting
@@ -187,7 +187,7 @@ describe('Game State Secrets', () => {
       expect(true).toBe(true); // Placeholder
     });
 
-    it('should fetch secret to reveal river card', () => {
+    it("should fetch secret to reveal river card", () => {
       // Mock structure:
       // - Mock game state on turn
       // - Action completes turn betting
@@ -197,7 +197,7 @@ describe('Game State Secrets', () => {
       expect(true).toBe(true); // Placeholder
     });
 
-    it('should handle double board reveals for PLO', () => {
+    it("should handle double board reveals for PLO", () => {
       // Mock structure:
       // - Fetch secret with two full boards
       // - Reveal cards from both boards simultaneously
@@ -207,8 +207,8 @@ describe('Game State Secrets', () => {
     });
   });
 
-  describe('Error scenarios', () => {
-    it('should handle missing game_state_id', () => {
+  describe("Error scenarios", () => {
+    it("should handle missing game_state_id", () => {
       // Mock structure:
       // - Call insertGameStateSecret without game_state_id
       // - Verify error thrown
@@ -216,7 +216,7 @@ describe('Game State Secrets', () => {
       expect(true).toBe(true); // Placeholder
     });
 
-    it('should handle invalid deck seed format', () => {
+    it("should handle invalid deck seed format", () => {
       // Mock structure:
       // - Call insertGameStateSecret with non-string seed
       // - Verify handled gracefully or error thrown
@@ -224,7 +224,7 @@ describe('Game State Secrets', () => {
       expect(true).toBe(true); // Placeholder
     });
 
-    it('should handle invalid board format', () => {
+    it("should handle invalid board format", () => {
       // Mock structure:
       // - Call insertGameStateSecret with malformed board (not array)
       // - Verify error thrown
@@ -232,7 +232,7 @@ describe('Game State Secrets', () => {
       expect(true).toBe(true); // Placeholder
     });
 
-    it('should handle boards with wrong number of cards', () => {
+    it("should handle boards with wrong number of cards", () => {
       // Mock structure:
       // - Call insertGameStateSecret with board of 3 cards (should be 5)
       // - Verify handled gracefully (could allow, or validate)
@@ -240,7 +240,7 @@ describe('Game State Secrets', () => {
       expect(true).toBe(true); // Placeholder
     });
 
-    it('should handle concurrent secret inserts for same game state', () => {
+    it("should handle concurrent secret inserts for same game state", () => {
       // Mock structure:
       // - Simulate two simultaneous insertGameStateSecret calls
       // - Verify database constraint prevents duplicates

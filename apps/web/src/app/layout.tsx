@@ -16,7 +16,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Degen Poker",
-  description: "Play real-time poker online with friends across multiple game modes",
+  description:
+    "Play real-time poker online with friends across multiple game modes",
 };
 
 export default function RootLayout({

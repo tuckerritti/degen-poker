@@ -31,8 +31,9 @@ const GAME_MODES: GameModeConfig[] = [
 export default function Home() {
   const router = useRouter();
   const { sessionId, accessToken } = useSession();
-  const [selectedMode, setSelectedMode] =
-    useState<GameMode>("double_board_bomb_pot_plo");
+  const [selectedMode, setSelectedMode] = useState<GameMode>(
+    "double_board_bomb_pot_plo",
+  );
   const [isCreating, setIsCreating] = useState(false);
 
   const [smallBlind, setSmallBlind] = useState(5);
@@ -67,20 +68,22 @@ export default function Home() {
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_ENGINE_URL.replace(/\/+$/, "")}/rooms`,
         {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        },
-        body: JSON.stringify({
-          // PLO bomb pots: big blind value is the ante; SB set to 0
-          smallBlind: selectedMode === "double_board_bomb_pot_plo" ? 0 : smallBlind,
-          bigBlind: selectedMode === "double_board_bomb_pot_plo" ? ploAnte : bigBlind,
-          minBuyIn,
-          maxBuyIn,
-          gameMode: selectedMode,
-          ownerAuthUserId: sessionId,
-        }),
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          },
+          body: JSON.stringify({
+            // PLO bomb pots: big blind value is the ante; SB set to 0
+            smallBlind:
+              selectedMode === "double_board_bomb_pot_plo" ? 0 : smallBlind,
+            bigBlind:
+              selectedMode === "double_board_bomb_pot_plo" ? ploAnte : bigBlind,
+            minBuyIn,
+            maxBuyIn,
+            gameMode: selectedMode,
+            ownerAuthUserId: sessionId,
+          }),
         },
       );
 
@@ -139,7 +142,10 @@ export default function Home() {
                 >
                   {mode.name}
                 </h3>
-                <p className="mt-1 text-xs text-cigar-ash" style={{ fontFamily: "Lato, sans-serif" }}>
+                <p
+                  className="mt-1 text-xs text-cigar-ash"
+                  style={{ fontFamily: "Lato, sans-serif" }}
+                >
                   {mode.description}
                 </p>
                 {!mode.enabled && (
@@ -206,8 +212,12 @@ export default function Home() {
                   min={1}
                   required
                 />
-                <p className="mt-1 text-xs text-cigar-ash" style={{ fontFamily: "Lato, sans-serif" }}>
-                  Ante-only bomb pot (big blind value is the ante; small blind is 0).
+                <p
+                  className="mt-1 text-xs text-cigar-ash"
+                  style={{ fontFamily: "Lato, sans-serif" }}
+                >
+                  Ante-only bomb pot (big blind value is the ante; small blind
+                  is 0).
                 </p>
               </div>
             )}
@@ -226,7 +236,9 @@ export default function Home() {
                   onChange={(e) => setMinBuyIn(Number(e.target.value))}
                   className="mt-1 block w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-cream-parchment shadow-sm focus:border-whiskey-gold focus:outline-none focus:ring-1 focus:ring-whiskey-gold backdrop-blur-sm"
                   style={{ fontFamily: "Roboto Mono, monospace" }}
-                  min={(selectedMode === "texas_holdem" ? bigBlind : ploAnte) * 20}
+                  min={
+                    (selectedMode === "texas_holdem" ? bigBlind : ploAnte) * 20
+                  }
                   required
                 />
               </div>

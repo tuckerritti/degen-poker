@@ -159,10 +159,10 @@ export function evaluatePLOHandPartial(
             try {
               // Type assertion needed because hand-evaluator expects specific card type union
               const result = evaluate({
-              holeCards: hand as unknown as Parameters<
-                typeof evaluate
-              >[0]["holeCards"],
-            });
+                holeCards: hand as unknown as Parameters<
+                  typeof evaluate
+                >[0]["holeCards"],
+              });
               if (
                 !bestEvaluation ||
                 compare(
@@ -263,10 +263,10 @@ export function evaluatePLOHand(
             try {
               // Type assertion needed because hand-evaluator expects specific card type union
               const result = evaluate({
-              holeCards: hand as unknown as Parameters<
-                typeof evaluate
-              >[0]["holeCards"],
-            });
+                holeCards: hand as unknown as Parameters<
+                  typeof evaluate
+                >[0]["holeCards"],
+              });
               if (
                 !bestEvaluation ||
                 compare(
@@ -355,10 +355,15 @@ export function evaluateHoldemHandPartial(
 
     // Type assertion needed because hand-evaluator expects specific card type union
     const result = evaluate({
-      holeCards: allCards as unknown as Parameters<typeof evaluate>[0]["holeCards"],
+      holeCards: allCards as unknown as Parameters<
+        typeof evaluate
+      >[0]["holeCards"],
     });
 
-    const description = getDetailedDescription(result.strength, result.hand as unknown as string[]);
+    const description = getDetailedDescription(
+      result.strength,
+      result.hand as unknown as string[],
+    );
 
     evalLogger.debug(
       {
@@ -419,10 +424,15 @@ export function evaluateHoldemHand(
 
     // Type assertion needed because hand-evaluator expects specific card type union
     const result = evaluate({
-      holeCards: allCards as unknown as Parameters<typeof evaluate>[0]["holeCards"],
+      holeCards: allCards as unknown as Parameters<
+        typeof evaluate
+      >[0]["holeCards"],
     });
 
-    const description = getDetailedDescription(result.strength, result.hand as unknown as string[]);
+    const description = getDetailedDescription(
+      result.strength,
+      result.hand as unknown as string[],
+    );
 
     evalLogger.debug(
       {
@@ -484,23 +494,22 @@ export function findBoardWinners(
   }));
 
   // Find best hand using full compare (strength + kickers)
-  const bestEvaluation = evaluations.reduce<typeof evaluations[number] | null>(
-    (best, current) => {
-      if (!best) return current;
-      const comparison = compare(
-        {
-          strength: current.rank,
-          hand: current.hand as unknown as Parameters<typeof compare>[0]["hand"],
-        },
-        {
-          strength: best.rank,
-          hand: best.hand as unknown as Parameters<typeof compare>[0]["hand"],
-        },
-      );
-      return comparison === -1 ? current : best;
-    },
-    null,
-  );
+  const bestEvaluation = evaluations.reduce<
+    (typeof evaluations)[number] | null
+  >((best, current) => {
+    if (!best) return current;
+    const comparison = compare(
+      {
+        strength: current.rank,
+        hand: current.hand as unknown as Parameters<typeof compare>[0]["hand"],
+      },
+      {
+        strength: best.rank,
+        hand: best.hand as unknown as Parameters<typeof compare>[0]["hand"],
+      },
+    );
+    return comparison === -1 ? current : best;
+  }, null);
 
   if (!bestEvaluation) {
     evalLogger.warn("No valid evaluations found");

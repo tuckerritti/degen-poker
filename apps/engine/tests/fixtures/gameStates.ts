@@ -1,13 +1,15 @@
-import type { GameStateRow } from '../../src/types.js';
+import type { GameStateRow } from "../../src/types.js";
 
-export function createGameState(overrides: Partial<GameStateRow> = {}): GameStateRow {
+export function createGameState(
+  overrides: Partial<GameStateRow> = {},
+): GameStateRow {
   return {
-    id: 'game-state-1',
-    room_id: 'test-room-1',
+    id: "game-state-1",
+    room_id: "test-room-1",
     hand_number: 1,
-    deck_seed: 'hidden',
+    deck_seed: "hidden",
     button_seat: 1,
-    phase: 'flop',
+    phase: "flop",
     pot_size: 15,
     current_bet: 0,
     min_raise: 2,
@@ -20,13 +22,13 @@ export function createGameState(overrides: Partial<GameStateRow> = {}): GameStat
     seats_acted: [1],
     burned_card_indices: [],
     board_state: {
-      board1: ['Ah', 'Kh', 'Qh'],
-      board2: ['2c', '3c', '4c']
+      board1: ["Ah", "Kh", "Qh"],
+      board2: ["2c", "3c", "4c"],
     },
     side_pots: [],
     action_history: [],
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
-    ...overrides
+    ...overrides,
   };
 }

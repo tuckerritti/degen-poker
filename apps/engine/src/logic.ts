@@ -2,28 +2,40 @@ import { randomBytes } from "crypto";
 import { ActionType, GamePhase } from "@poker/shared";
 import { shuffleDeck } from "./deck.js";
 import type { GameStateRow, Room, RoomPlayer } from "./types.js";
-import { compare, evaluateOmaha, evaluateHoldem } from "@poker-apprentice/hand-evaluator";
+import {
+  compare,
+  evaluateOmaha,
+  evaluateHoldem,
+} from "@poker-apprentice/hand-evaluator";
 
 export interface DealResult {
   gameState: Partial<GameStateRow>;
-  playerHands: { seat_number: number; cards: string[]; auth_user_id: string | null }[];
+  playerHands: {
+    seat_number: number;
+    cards: string[];
+    auth_user_id: string | null;
+  }[];
   updatedPlayers: Partial<RoomPlayer>[];
   deckSeed: string;
   fullBoard1: string[];
   fullBoard2: string[];
 }
 
-export function nextButtonSeat(players: RoomPlayer[], currentButton: number | null): number {
+export function nextButtonSeat(
+  players: RoomPlayer[],
+  currentButton: number | null,
+): number {
   if (players.length === 0) return 1;
-  const seats = players
-    .map((p) => p.seat_number)
-    .sort((a, b) => a - b);
+  const seats = players.map((p) => p.seat_number).sort((a, b) => a - b);
   if (currentButton === null) return seats[0];
   const next = seats.find((s) => s > currentButton);
   return next ?? seats[0];
 }
 
-export function actionOrder(players: RoomPlayer[], buttonSeat: number): number[] {
+export function actionOrder(
+  players: RoomPlayer[],
+  buttonSeat: number,
+): number[] {
   const activeSeats = players
     .filter((p) => !p.is_spectating && !p.is_sitting_out && p.chip_stack > 0)
     .map((p) => p.seat_number)
@@ -46,7 +58,7 @@ export function postBlinds(
   players: RoomPlayer[],
   buttonSeat: number,
   smallBlind: number,
-  bigBlind: number
+  bigBlind: number,
 ): BlindPostingResult {
   const activePlayers = players.filter(
     (p) => !p.is_spectating && !p.is_sitting_out && p.chip_stack > 0,
@@ -177,7 +189,12 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
 
   if (isHoldem) {
     // Post blinds for Texas Hold'em
-    const blindResult = postBlinds(activePlayers, buttonSeat, room.small_blind, room.big_blind);
+    const blindResult = postBlinds(
+      activePlayers,
+      buttonSeat,
+      room.small_blind,
+      room.big_blind,
+    );
     updatedPlayers = blindResult.updatedPlayers;
     totalPot = blindResult.totalPosted;
     currentBet = blindResult.currentBet;
@@ -188,8 +205,15 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
     const isHeadsUp = activePlayers.length === 2;
 
     seatsToAct = isHeadsUp
-      ? order.filter((s) => !updatedPlayers.find((p) => p.seat_number === s)?.is_all_in)
-      : order.slice(2).concat(order.slice(0, 2)).filter((s) => !updatedPlayers.find((p) => p.seat_number === s)?.is_all_in);
+      ? order.filter(
+          (s) => !updatedPlayers.find((p) => p.seat_number === s)?.is_all_in,
+        )
+      : order
+          .slice(2)
+          .concat(order.slice(0, 2))
+          .filter(
+            (s) => !updatedPlayers.find((p) => p.seat_number === s)?.is_all_in,
+          );
     currentActor = seatsToAct[0] ?? null;
   } else {
     // Post antes for PLO bomb pot: big blind value is the ante
@@ -212,17 +236,22 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
       } as Partial<RoomPlayer>;
     });
 
-    totalPot = updatedPlayers.reduce((sum, p) => sum + (p.total_invested_this_hand ?? 0), 0);
+    totalPot = updatedPlayers.reduce(
+      (sum, p) => sum + (p.total_invested_this_hand ?? 0),
+      0,
+    );
     currentBet = ante > 0 ? ante : 0;
     const order = actionOrder(activePlayers, buttonSeat);
-    seatsToAct = order.filter((s) => !updatedPlayers.find((p) => p.seat_number === s)?.is_all_in);
+    seatsToAct = order.filter(
+      (s) => !updatedPlayers.find((p) => p.seat_number === s)?.is_all_in,
+    );
     currentActor = seatsToAct[0] ?? null;
   }
 
   const initialPhase = isHoldem ? "preflop" : "flop";
   const initialBoardState = isHoldem
-    ? { board1: [], board2: [] }  // No cards shown preflop
-    : { board1: board1.slice(0, 3), board2: board2.slice(0, 3) };  // Show 3 cards on flop for PLO
+    ? { board1: [], board2: [] } // No cards shown preflop
+    : { board1: board1.slice(0, 3), board2: board2.slice(0, 3) }; // Show 3 cards on flop for PLO
 
   const gameState: Partial<GameStateRow> = {
     room_id: room.id,
@@ -246,7 +275,14 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
     action_history: [],
   };
 
-  return { gameState, playerHands, updatedPlayers, deckSeed, fullBoard1: board1, fullBoard2: board2 };
+  return {
+    gameState,
+    playerHands,
+    updatedPlayers,
+    deckSeed,
+    fullBoard1: board1,
+    fullBoard2: board2,
+  };
 }
 
 export interface ActionContext {
@@ -267,7 +303,13 @@ export interface ActionOutcome {
 }
 
 function activeNonFolded(players: RoomPlayer[]): RoomPlayer[] {
-  return players.filter((p) => !p.has_folded && !p.is_spectating && !p.is_sitting_out && p.chip_stack >= 0);
+  return players.filter(
+    (p) =>
+      !p.has_folded &&
+      !p.is_spectating &&
+      !p.is_sitting_out &&
+      p.chip_stack >= 0,
+  );
 }
 
 function rotateAfter(seats: number[], current: number): number[] {
@@ -286,17 +328,35 @@ export function applyAction(
 ): ActionOutcome {
   const { gameState, players, room, fullBoard1, fullBoard2 } = ctx;
 
-  if (gameState.current_actor_seat !== seatNumber && gameState.phase !== "showdown") {
-    return { updatedGameState: {}, updatedPlayers: [], handCompleted: false, error: "Not your turn" };
+  if (
+    gameState.current_actor_seat !== seatNumber &&
+    gameState.phase !== "showdown"
+  ) {
+    return {
+      updatedGameState: {},
+      updatedPlayers: [],
+      handCompleted: false,
+      error: "Not your turn",
+    };
   }
 
   const player = players.find((p) => p.seat_number === seatNumber);
   if (!player) {
-    return { updatedGameState: {}, updatedPlayers: [], handCompleted: false, error: "Seat not found" };
+    return {
+      updatedGameState: {},
+      updatedPlayers: [],
+      handCompleted: false,
+      error: "Seat not found",
+    };
   }
 
   if (player.has_folded || player.is_spectating || player.is_sitting_out) {
-    return { updatedGameState: {}, updatedPlayers: [], handCompleted: false, error: "Player cannot act" };
+    return {
+      updatedGameState: {},
+      updatedPlayers: [],
+      handCompleted: false,
+      error: "Player cannot act",
+    };
   }
 
   let pot = gameState.pot_size ?? 0;
@@ -310,10 +370,11 @@ export function applyAction(
   const actionHistory = Array.isArray(gameState.action_history)
     ? [...(gameState.action_history as unknown[])]
     : [];
-  const boardState = (gameState.board_state as {
-    board1?: string[];
-    board2?: string[];
-  }) ?? {};
+  const boardState =
+    (gameState.board_state as {
+      board1?: string[];
+      board2?: string[];
+    }) ?? {};
 
   const markActed = () => {
     seatsToAct = seatsToAct.filter((s) => s !== seatNumber);
@@ -334,12 +395,14 @@ export function applyAction(
       total_buy_in: player.total_buy_in,
       chip_stack: newStack,
       current_bet: newCurrentBet,
-      total_invested_this_hand: (player.total_invested_this_hand ?? 0) + investAmount,
+      total_invested_this_hand:
+        (player.total_invested_this_hand ?? 0) + investAmount,
       is_all_in: newStack === 0,
     });
     player.chip_stack = newStack;
     player.current_bet = newCurrentBet;
-    player.total_invested_this_hand = (player.total_invested_this_hand ?? 0) + investAmount;
+    player.total_invested_this_hand =
+      (player.total_invested_this_hand ?? 0) + investAmount;
     if (newStack === 0) player.is_all_in = true;
   };
 
@@ -353,7 +416,7 @@ export function applyAction(
         display_name: player.display_name,
         total_buy_in: player.total_buy_in,
         chip_stack: player.chip_stack,
-        has_folded: true
+        has_folded: true,
       });
       player.has_folded = true;
       markActed();
@@ -361,7 +424,12 @@ export function applyAction(
     }
     case "check": {
       if ((gameState.current_bet ?? 0) !== (player.current_bet ?? 0)) {
-        return { updatedGameState: {}, updatedPlayers: [], handCompleted: false, error: "Cannot check facing bet" };
+        return {
+          updatedGameState: {},
+          updatedPlayers: [],
+          handCompleted: false,
+          error: "Cannot check facing bet",
+        };
       }
       markActed();
       break;
@@ -369,7 +437,12 @@ export function applyAction(
     case "call": {
       const diff = (gameState.current_bet ?? 0) - (player.current_bet ?? 0);
       if (diff <= 0) {
-        return { updatedGameState: {}, updatedPlayers: [], handCompleted: false, error: "Nothing to call" };
+        return {
+          updatedGameState: {},
+          updatedPlayers: [],
+          handCompleted: false,
+          error: "Nothing to call",
+        };
       }
       invest(diff);
       markActed();
@@ -377,16 +450,31 @@ export function applyAction(
     }
     case "bet": {
       if (currentBet > 0) {
-        return { updatedGameState: {}, updatedPlayers: [], handCompleted: false, error: "Bet not allowed after bet" };
+        return {
+          updatedGameState: {},
+          updatedPlayers: [],
+          handCompleted: false,
+          error: "Bet not allowed after bet",
+        };
       }
       if (!amount || amount <= 0) {
-        return { updatedGameState: {}, updatedPlayers: [], handCompleted: false, error: "Bet amount required" };
+        return {
+          updatedGameState: {},
+          updatedPlayers: [],
+          handCompleted: false,
+          error: "Bet amount required",
+        };
       }
       currentBet = amount;
       minRaise = amount;
       invest(amount);
-      seatsToAct = rotateAfter(actionOrder(players, gameState.button_seat), seatNumber).filter(
-        (s) => s !== seatNumber && !players.find((p) => p.seat_number === s)?.has_folded,
+      seatsToAct = rotateAfter(
+        actionOrder(players, gameState.button_seat),
+        seatNumber,
+      ).filter(
+        (s) =>
+          s !== seatNumber &&
+          !players.find((p) => p.seat_number === s)?.has_folded,
       );
       seatsActed = [];
       break;
@@ -394,13 +482,26 @@ export function applyAction(
     case "raise":
     case "all_in": {
       if (currentBet === 0 && actionType === "raise") {
-        return { updatedGameState: {}, updatedPlayers: [], handCompleted: false, error: "No bet to raise" };
+        return {
+          updatedGameState: {},
+          updatedPlayers: [],
+          handCompleted: false,
+          error: "No bet to raise",
+        };
       }
-      const targetAmount = actionType === "all_in" ? (player.current_bet ?? 0) + player.chip_stack : amount ?? 0;
+      const targetAmount =
+        actionType === "all_in"
+          ? (player.current_bet ?? 0) + player.chip_stack
+          : (amount ?? 0);
       // Short-stack all-ins are allowed to call for less; only enforce raise rules when the all-in exceeds the current bet.
       const isAllInRaise = actionType === "all_in" && targetAmount > currentBet;
       if (actionType !== "all_in" && targetAmount <= currentBet) {
-        return { updatedGameState: {}, updatedPlayers: [], handCompleted: false, error: "Raise must exceed current bet" };
+        return {
+          updatedGameState: {},
+          updatedPlayers: [],
+          handCompleted: false,
+          error: "Raise must exceed current bet",
+        };
       }
       if (actionType === "all_in" && !isAllInRaise) {
         // Treat as a call for less; keep table currentBet/minRaise unchanged.
@@ -410,19 +511,34 @@ export function applyAction(
       }
       const raiseAmount = targetAmount - currentBet;
       if (raiseAmount < minRaise && actionType !== "all_in") {
-        return { updatedGameState: {}, updatedPlayers: [], handCompleted: false, error: "Raise below minimum" };
+        return {
+          updatedGameState: {},
+          updatedPlayers: [],
+          handCompleted: false,
+          error: "Raise below minimum",
+        };
       }
       invest(targetAmount - (player.current_bet ?? 0));
       currentBet = targetAmount;
       minRaise = raiseAmount;
-      seatsToAct = rotateAfter(actionOrder(players, gameState.button_seat), seatNumber).filter(
-        (s) => s !== seatNumber && !players.find((p) => p.seat_number === s)?.has_folded,
+      seatsToAct = rotateAfter(
+        actionOrder(players, gameState.button_seat),
+        seatNumber,
+      ).filter(
+        (s) =>
+          s !== seatNumber &&
+          !players.find((p) => p.seat_number === s)?.has_folded,
       );
       seatsActed = [];
       break;
     }
     default:
-      return { updatedGameState: {}, updatedPlayers: [], handCompleted: false, error: "Unknown action" };
+      return {
+        updatedGameState: {},
+        updatedPlayers: [],
+        handCompleted: false,
+        error: "Unknown action",
+      };
   }
 
   actionHistory.push({
@@ -463,14 +579,23 @@ export function applyAction(
   // Street completion: if no seats left to act and all bets are matched
   const awaiting = seatsToAct.length;
   const allBetsEqual = players.every(
-    (p) => p.has_folded || p.is_spectating || p.is_sitting_out || (p.current_bet ?? 0) === currentBet || p.is_all_in,
+    (p) =>
+      p.has_folded ||
+      p.is_spectating ||
+      p.is_sitting_out ||
+      (p.current_bet ?? 0) === currentBet ||
+      p.is_all_in,
   );
 
   let currentActor: number | null = seatsToAct[0] ?? null;
 
   if (awaiting === 0 && allBetsEqual) {
-    const activeNonFoldedPlayers = players.filter((p) => !p.has_folded && !p.is_spectating && !p.is_sitting_out);
-    const nonAllInCount = activeNonFoldedPlayers.filter((p) => !p.is_all_in).length;
+    const activeNonFoldedPlayers = players.filter(
+      (p) => !p.has_folded && !p.is_spectating && !p.is_sitting_out,
+    );
+    const nonAllInCount = activeNonFoldedPlayers.filter(
+      (p) => !p.is_all_in,
+    ).length;
 
     // Debug aid for street-closing logic; keep disabled in production
     // console.log('street-closure', { nonAllInCount, awaiting, allBetsEqual });
@@ -486,7 +611,9 @@ export function applyAction(
         fullBoard2: isHoldem ? [] : fullBoard2,
       };
 
-      const calculatedSidePotsFinal = calculateSidePots(activeNonFoldedPlayers as RoomPlayer[]);
+      const calculatedSidePotsFinal = calculateSidePots(
+        activeNonFoldedPlayers as RoomPlayer[],
+      );
 
       return {
         updatedGameState: {
@@ -525,7 +652,7 @@ export function applyAction(
           display_name: p.display_name,
           total_buy_in: p.total_buy_in,
           chip_stack: p.chip_stack,
-          current_bet: 0
+          current_bet: 0,
         });
         p.current_bet = 0;
       });
@@ -534,7 +661,13 @@ export function applyAction(
       const order = actionOrder(players, gameState.button_seat);
       seatsToAct = order.filter((s) => {
         const pl = players.find((p) => p.seat_number === s);
-        return pl && !pl.has_folded && !pl.is_all_in && !pl.is_sitting_out && !pl.is_spectating;
+        return (
+          pl &&
+          !pl.has_folded &&
+          !pl.is_all_in &&
+          !pl.is_sitting_out &&
+          !pl.is_spectating
+        );
       });
       currentActor = seatsToAct[0] ?? null;
     }
@@ -599,7 +732,9 @@ export function applyAction(
         const updated = updatedPlayers.find((u) => u.id === p.id);
         return updated ? { ...p, ...updated } : p;
       });
-      const calculatedSidePots = calculateSidePots(mergedPlayers as RoomPlayer[]);
+      const calculatedSidePots = calculateSidePots(
+        mergedPlayers as RoomPlayer[],
+      );
 
       return {
         updatedGameState: {
@@ -665,12 +800,18 @@ export function applyAction(
       seats_to_act: seatsToAct,
       seats_acted: seatsActed,
       action_history: actionHistory,
-      last_aggressor_seat: actionType === "bet" || actionType === "raise" || actionType === "all_in"
-        ? seatNumber
-        : gameState.last_aggressor_seat,
-      last_raise_amount: actionType === "bet" || actionType === "raise" || actionType === "all_in"
-        ? currentBet
-        : gameState.last_raise_amount,
+      last_aggressor_seat:
+        actionType === "bet" ||
+        actionType === "raise" ||
+        actionType === "all_in"
+          ? seatNumber
+          : gameState.last_aggressor_seat,
+      last_raise_amount:
+        actionType === "bet" ||
+        actionType === "raise" ||
+        actionType === "all_in"
+          ? currentBet
+          : gameState.last_raise_amount,
       board_state: { ...boardState },
       side_pots: calculatedSidePots,
     },
@@ -680,7 +821,14 @@ export function applyAction(
 }
 
 export function advancePhase(current: GamePhase): GamePhase {
-  const order: GamePhase[] = ["preflop", "flop", "turn", "river", "showdown", "complete"];
+  const order: GamePhase[] = [
+    "preflop",
+    "flop",
+    "turn",
+    "river",
+    "showdown",
+    "complete",
+  ];
   const idx = order.indexOf(current);
   if (idx === -1 || idx === order.length - 1) return "complete";
   return order[idx + 1];
@@ -689,13 +837,20 @@ export function advancePhase(current: GamePhase): GamePhase {
 /**
  * Evaluate a single player's best hand for a given board (PLO rules)
  */
-function evaluatePlayerHand(holeCards: string[], board: string[]): { strength: number; hand: string[] } {
+function evaluatePlayerHand(
+  holeCards: string[],
+  board: string[],
+): { strength: number; hand: string[] } {
   try {
     // Type assertion needed because evaluateOmaha expects specific card literal types
     // but our cards come from the database as plain strings
     const evaluated = evaluateOmaha({
-      holeCards: holeCards as unknown as Parameters<typeof evaluateOmaha>[0]['holeCards'],
-      communityCards: board as unknown as Parameters<typeof evaluateOmaha>[0]['communityCards'],
+      holeCards: holeCards as unknown as Parameters<
+        typeof evaluateOmaha
+      >[0]["holeCards"],
+      communityCards: board as unknown as Parameters<
+        typeof evaluateOmaha
+      >[0]["communityCards"],
     });
     return {
       strength: evaluated.strength,
@@ -780,11 +935,18 @@ export function determineDoubleBoardWinners(
 /**
  * Evaluate a single player's best hand for Hold'em (standard poker rules)
  */
-function evaluateHoldemHand(holeCards: string[], board: string[]): { strength: number; hand: string[] } {
+function evaluateHoldemHand(
+  holeCards: string[],
+  board: string[],
+): { strength: number; hand: string[] } {
   try {
     const evaluated = evaluateHoldem({
-      holeCards: holeCards as unknown as Parameters<typeof evaluateHoldem>[0]['holeCards'],
-      communityCards: board as unknown as Parameters<typeof evaluateHoldem>[0]['communityCards'],
+      holeCards: holeCards as unknown as Parameters<
+        typeof evaluateHoldem
+      >[0]["holeCards"],
+      communityCards: board as unknown as Parameters<
+        typeof evaluateHoldem
+      >[0]["communityCards"],
     });
     return {
       strength: evaluated.strength,
@@ -814,7 +976,9 @@ export function determineSingleBoardWinners(
   }));
 
   // Find best hand(s)
-  const maxStrength = Math.max(...evaluations.map((e) => e.evaluation.strength));
+  const maxStrength = Math.max(
+    ...evaluations.map((e) => e.evaluation.strength),
+  );
   const winners = evaluations
     .filter((e) => e.evaluation.strength === maxStrength)
     .map((e) => e.seatNumber);
@@ -825,7 +989,9 @@ export function determineSingleBoardWinners(
 /**
  * Calculate side pots from players with different all-in amounts
  */
-export function calculateSidePots(players: RoomPlayer[]): Array<{ amount: number; eligibleSeats: number[] }> {
+export function calculateSidePots(
+  players: RoomPlayer[],
+): Array<{ amount: number; eligibleSeats: number[] }> {
   const contributors = players.filter(
     (p) =>
       !p.has_folded &&
@@ -837,7 +1003,8 @@ export function calculateSidePots(players: RoomPlayer[]): Array<{ amount: number
   if (contributors.length === 0) return [];
 
   const sorted = [...contributors].sort(
-    (a, b) => (a.total_invested_this_hand ?? 0) - (b.total_invested_this_hand ?? 0),
+    (a, b) =>
+      (a.total_invested_this_hand ?? 0) - (b.total_invested_this_hand ?? 0),
   );
 
   const uniqueLevels = Array.from(
@@ -865,7 +1032,11 @@ export function calculateSidePots(players: RoomPlayer[]): Array<{ amount: number
   return pots;
 }
 
-function distributeEven(amount: number, seats: number[], payouts: Map<number, number>) {
+function distributeEven(
+  amount: number,
+  seats: number[],
+  payouts: Map<number, number>,
+) {
   if (amount <= 0 || seats.length === 0) return;
   const sortedSeats = [...seats].sort((a, b) => a - b);
   const base = Math.floor(amount / sortedSeats.length);
@@ -895,13 +1066,19 @@ export function endOfHandPayout(
       : [
           {
             amount: 0,
-            eligibleSeats: Array.from(new Set([...board1Winners, ...board2Winners])),
+            eligibleSeats: Array.from(
+              new Set([...board1Winners, ...board2Winners]),
+            ),
           },
         ];
 
   potsToDistribute.forEach((pot) => {
-    const eligibleBoard1 = board1Winners.filter((seat) => pot.eligibleSeats.includes(seat));
-    const eligibleBoard2 = board2Winners.filter((seat) => pot.eligibleSeats.includes(seat));
+    const eligibleBoard1 = board1Winners.filter((seat) =>
+      pot.eligibleSeats.includes(seat),
+    );
+    const eligibleBoard2 = board2Winners.filter((seat) =>
+      pot.eligibleSeats.includes(seat),
+    );
 
     const board1Seats =
       eligibleBoard1.length > 0
@@ -923,5 +1100,8 @@ export function endOfHandPayout(
     distributeEven(remainderPot, board2Seats, payouts);
   });
 
-  return Array.from(payouts.entries()).map(([seat, amount]) => ({ seat, amount }));
+  return Array.from(payouts.entries()).map(([seat, amount]) => ({
+    seat,
+    amount,
+  }));
 }
