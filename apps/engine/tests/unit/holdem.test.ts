@@ -10,7 +10,6 @@ const holdemRoom: Room = {
   game_mode: 'texas_holdem',
   small_blind: 5,
   big_blind: 10,
-  bomb_pot_ante: 0, // No ante in Hold'em
 };
 
 describe('Texas Hold\'em', () => {

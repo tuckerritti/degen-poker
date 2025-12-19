@@ -27,13 +27,12 @@ export const GAME_MODES = ["double_board_bomb_pot_plo", "texas_holdem"] as const
 export type GameMode = (typeof GAME_MODES)[number];
 
 export interface CreateRoomPayload {
-  // Bomb pots are ante-only; blinds may be omitted and derived server-side when needed.
+  // For PLO bomb pots, big blind acts as the ante; small blind may be 0.
   smallBlind?: number;
-  bigBlind?: number;
+  bigBlind: number;
   minBuyIn: number;
   maxBuyIn: number;
   maxPlayers?: number;
-  bombPotAnte: number;
   interHandDelay?: number;
   pauseAfterHand?: boolean;
   ownerAuthUserId?: string | null;

@@ -41,13 +41,12 @@ async function requireUser(req: Request, res: Response): Promise<string | null> 
 }
 
 const createRoomSchema = z.object({
-  // Bomb pots are ante-only; blinds are optional and derived when omitted.
-  smallBlind: z.number().int().min(0).optional(),
-  bigBlind: z.number().int().min(0).optional(),
+  // For PLO bomb pots, big blind acts as the ante; small blind may be 0.
+  smallBlind: z.number().int().nonnegative().optional(),
+  bigBlind: z.number().int().positive(),
   minBuyIn: z.number().int().positive(),
   maxBuyIn: z.number().int().positive(),
   maxPlayers: z.number().int().min(2).max(10).optional(),
-  bombPotAnte: z.number().int().min(1, "bombPotAnte must be at least 1").optional(),
   interHandDelay: z.number().int().min(0).optional(),
   pauseAfterHand: z.boolean().optional(),
   gameMode: z.enum(["double_board_bomb_pot_plo", "texas_holdem"]).optional(),
@@ -71,11 +70,6 @@ const ACTIONS = [
   "all_in",
 ] as const satisfies ActionType[];
 
-const rebuySchema = z.object({
-  seatNumber: z.number().int().min(0),
-  rebuyAmount: z.number().int().positive(),
-});
-
 const actionSchema = z.object({
   seatNumber: z.number().int(),
   actionType: z.enum(ACTIONS),
@@ -94,27 +88,31 @@ app.post("/rooms", async (req: Request, res: Response) => {
 
     const payload = createRoomSchema.parse(req.body);
 
-    // Derive blinds from ante when not supplied; blinds remain stored for min-raise math
-    const effectiveBigBlind = payload.bigBlind ?? Math.max(payload.bombPotAnte ?? 0, 2);
-    let effectiveSmallBlind =
-      payload.smallBlind ?? Math.max(1, Math.min(effectiveBigBlind - 1, Math.floor(effectiveBigBlind / 2)));
+    const gameMode = payload.gameMode ?? "double_board_bomb_pot_plo";
+    const isHoldem = gameMode === "texas_holdem";
 
-    if (effectiveSmallBlind >= effectiveBigBlind) {
-      effectiveSmallBlind = Math.max(1, effectiveBigBlind - 1);
+    const effectiveBigBlind = payload.bigBlind;
+    let effectiveSmallBlind: number;
+
+    if (isHoldem) {
+      effectiveSmallBlind =
+        payload.smallBlind ?? Math.max(1, Math.min(effectiveBigBlind - 1, Math.floor(effectiveBigBlind / 2)));
+      if (effectiveSmallBlind <= 0) {
+        return res.status(400).json({ error: "smallBlind must be >= 1 for Texas Hold'em" });
+      }
+      if (effectiveBigBlind <= effectiveSmallBlind) {
+        return res.status(400).json({ error: "bigBlind must be greater than smallBlind" });
+      }
+    } else {
+      // Bomb pot PLO: BB doubles as ante; SB is optional and can be 0
+      effectiveSmallBlind = payload.smallBlind ?? 0;
+      if (effectiveBigBlind <= effectiveSmallBlind) {
+        effectiveSmallBlind = 0; // keep DB constraint big_blind > small_blind
+      }
     }
 
     if (payload.maxBuyIn < payload.minBuyIn) {
       return res.status(400).json({ error: "maxBuyIn must be >= minBuyIn" });
-    }
-    if (effectiveBigBlind <= effectiveSmallBlind) {
-      return res.status(400).json({ error: "bigBlind must be greater than smallBlind" });
-    }
-
-    const gameMode = payload.gameMode ?? "double_board_bomb_pot_plo";
-
-    // Validate game mode specific constraints
-    if (gameMode === "texas_holdem" && (payload.bombPotAnte ?? 0) > 0) {
-      return res.status(400).json({ error: "Texas Hold'em does not support bomb pot antes" });
     }
 
     const { data, error } = await supabase
@@ -125,7 +123,6 @@ app.post("/rooms", async (req: Request, res: Response) => {
         min_buy_in: payload.minBuyIn,
         max_buy_in: payload.maxBuyIn,
         max_players: payload.maxPlayers ?? 9,
-        bomb_pot_ante: payload.bombPotAnte,
         inter_hand_delay: payload.interHandDelay ?? 5,
         pause_after_hand: payload.pauseAfterHand ?? false,
         game_mode: gameMode,
@@ -219,80 +216,6 @@ app.post("/rooms/:roomId/join", async (req: Request, res: Response) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     logger.error({ err }, "failed to join room");
-    res.status(400).json({ error: message });
-  }
-});
-
-app.post("/rooms/:roomId/rebuy", async (req: Request, res: Response) => {
-  try {
-    const userId = await requireUser(req, res);
-    if (!userId) return;
-
-    const roomId = req.params.roomId;
-    const payload = rebuySchema.parse(req.body);
-
-    const { data: room, error: roomErr } = await supabase
-      .from("rooms")
-      .select("*")
-      .eq("id", roomId)
-      .single();
-    if (roomErr || !room) return res.status(404).json({ error: "Room not found" });
-
-    const activeGame = await fetchLatestGameState(roomId);
-    if (activeGame) {
-      return res.status(400).json({ error: "Cannot rebuy during an active hand" });
-    }
-
-    const { data: player, error: playerErr } = await supabase
-      .from("room_players")
-      .select("*")
-      .eq("room_id", roomId)
-      .eq("seat_number", payload.seatNumber)
-      .maybeSingle();
-    if (playerErr) throw playerErr;
-    if (!player) return res.status(404).json({ error: "Player not found at this seat" });
-
-    if (player.auth_user_id && player.auth_user_id !== userId) {
-      return res.status(403).json({ error: "Not authorized to rebuy for this seat" });
-    }
-
-    const newChipStack = (player.chip_stack ?? 0) + payload.rebuyAmount;
-    const remainingAllowed = room.max_buy_in - (player.chip_stack ?? 0);
-    if (remainingAllowed <= 0) {
-      return res.status(400).json({ error: "Player is already at the maximum buy-in" });
-    }
-    if (newChipStack > room.max_buy_in) {
-      return res.status(400).json({
-        error: `Rebuy would exceed maximum buy-in of ${room.max_buy_in}`
-      });
-    }
-
-    const { data: updatedPlayers, error: updateErr } = await supabase
-      .from("room_players")
-      .update({
-        chip_stack: newChipStack,
-        total_buy_in: (player.total_buy_in ?? 0) + payload.rebuyAmount,
-        auth_user_id: player.auth_user_id ?? userId,
-      })
-      .eq("id", player.id)
-      .eq("chip_stack", player.chip_stack ?? 0)
-      .select();
-    if (updateErr) throw updateErr;
-
-    const updatedPlayer = updatedPlayers?.[0];
-    if (!updatedPlayer) {
-      return res.status(409).json({ error: "Rebuy failed due to concurrent update, please try again" });
-    }
-
-    await supabase
-      .from("rooms")
-      .update({ last_activity_at: new Date().toISOString() })
-      .eq("id", roomId);
-
-    res.status(200).json({ player: updatedPlayer });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    logger.error({ err }, "failed to process rebuy");
     res.status(400).json({ error: message });
   }
 });

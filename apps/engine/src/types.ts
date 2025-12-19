@@ -8,7 +8,6 @@ export interface Room {
   max_buy_in: number;
   small_blind: number;
   big_blind: number;
-  bomb_pot_ante: number;
   button_seat: number | null;
   current_hand_number: number;
   inter_hand_delay: number;

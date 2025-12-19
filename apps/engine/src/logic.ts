@@ -192,8 +192,8 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
       : order.slice(2).concat(order.slice(0, 2)).filter((s) => !updatedPlayers.find((p) => p.seat_number === s)?.is_all_in);
     currentActor = seatsToAct[0] ?? null;
   } else {
-    // Post antes for PLO bomb pot
-    const ante = room.bomb_pot_ante ?? 0;
+    // Post antes for PLO bomb pot: big blind value is the ante
+    const ante = room.big_blind;
     updatedPlayers = activePlayers.map((p) => {
       const antePaid = Math.min(p.chip_stack, ante);
       const remaining = p.chip_stack - antePaid;
@@ -232,7 +232,7 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
     phase: initialPhase,
     pot_size: totalPot,
     current_bet: currentBet,
-    min_raise: (room.bomb_pot_ante ?? 0) > 0 ? room.bomb_pot_ante : room.big_blind,
+    min_raise: room.big_blind,
     current_actor_seat: currentActor,
     last_aggressor_seat: null,
     last_raise_amount: null,
@@ -301,7 +301,7 @@ export function applyAction(
 
   let pot = gameState.pot_size ?? 0;
   let currentBet = gameState.current_bet ?? 0;
-  const baseBet = Math.max(room.bomb_pot_ante ?? 0, room.big_blind);
+  const baseBet = room.big_blind;
   let minRaise = gameState.min_raise ?? baseBet;
   const updatedPlayers: Partial<RoomPlayer>[] = [];
   let seatsToAct = [...(gameState.seats_to_act ?? [])];
