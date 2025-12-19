@@ -331,6 +331,8 @@ app.patch("/rooms/:roomId/pause", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Room not active" });
     }
 
+    // Authorization: Only room owner can pause/unpause
+    // Note: If owner_auth_user_id is null (anonymous room), any authenticated user can pause
     if (room.owner_auth_user_id && room.owner_auth_user_id !== userId) {
       return res.status(403).json({ error: "Only the room owner can pause/unpause" });
     }
@@ -338,6 +340,7 @@ app.patch("/rooms/:roomId/pause", async (req: Request, res: Response) => {
     const gameState = await fetchLatestGameState(roomId);
 
     let updates: { is_paused?: boolean; pause_after_hand?: boolean; last_activity_at: string };
+    let pauseScheduled = false;
 
     if (room.is_paused) {
       // Unpause: clear both flags
@@ -352,6 +355,7 @@ app.patch("/rooms/:roomId/pause", async (req: Request, res: Response) => {
         pause_after_hand: true,
         last_activity_at: new Date().toISOString(),
       };
+      pauseScheduled = true;
     } else {
       // No active hand: pause immediately
       updates = {
@@ -369,7 +373,7 @@ app.patch("/rooms/:roomId/pause", async (req: Request, res: Response) => {
 
     if (updateErr) throw updateErr;
 
-    res.json({ room: updatedRoom });
+    res.json({ room: updatedRoom, pauseScheduled });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     logger.error({ err }, "failed to toggle pause");

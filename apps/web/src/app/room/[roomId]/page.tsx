@@ -238,13 +238,25 @@ export default function RoomPage({
       return;
     }
     try {
-      await engineFetch(`/rooms/${roomId}/pause`, {
+      const response = await engineFetch(`/rooms/${roomId}/pause`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${accessToken}`,
         },
-      });
+      }, accessToken);
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(data.error || "Failed to toggle pause");
+        return;
+      }
+
+      // Show feedback for scheduled pause
+      if (data.pauseScheduled) {
+        alert("Game will pause after this hand completes");
+      }
       // Real-time subscription will update UI automatically
     } catch (error) {
       console.error("Error toggling pause:", error);
