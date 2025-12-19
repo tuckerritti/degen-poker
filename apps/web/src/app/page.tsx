@@ -65,7 +65,6 @@ export default function Home() {
 
     try {
       const isPLO = selectedMode === "double_board_bomb_pot_plo";
-      const isHoldem = selectedMode === "texas_holdem";
 
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_ENGINE_URL.replace(/\/+$/, "")}/rooms`,
@@ -83,7 +82,6 @@ export default function Home() {
           maxBuyIn,
           gameMode: selectedMode,
           ...(isPLO && { bombPotAnte }),
-          ...(isHoldem && { bombPotAnte: 0 }),
           ownerAuthUserId: sessionId,
         }),
         },
