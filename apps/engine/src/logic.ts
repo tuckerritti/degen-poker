@@ -790,7 +790,7 @@ function evaluateHoldemHand(holeCards: string[], board: string[]): { strength: n
       strength: evaluated.strength,
       hand: evaluated.hand,
     };
-  } catch (err) {
+  } catch {
     return { strength: 0, hand: [] };
   }
 }

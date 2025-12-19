@@ -42,12 +42,12 @@ async function requireUser(req: Request, res: Response): Promise<string | null> 
 
 const createRoomSchema = z.object({
   // Bomb pots are ante-only; blinds are optional and derived when omitted.
-  smallBlind: z.number().int().positive().optional(),
-  bigBlind: z.number().int().positive().optional(),
+  smallBlind: z.number().int().min(0).optional(),
+  bigBlind: z.number().int().min(0).optional(),
   minBuyIn: z.number().int().positive(),
   maxBuyIn: z.number().int().positive(),
   maxPlayers: z.number().int().min(2).max(10).optional(),
-  bombPotAnte: z.number().int().min(1, "bombPotAnte must be at least 1"),
+  bombPotAnte: z.number().int().min(1, "bombPotAnte must be at least 1").optional(),
   interHandDelay: z.number().int().min(0).optional(),
   pauseAfterHand: z.boolean().optional(),
   gameMode: z.enum(["double_board_bomb_pot_plo", "texas_holdem"]).optional(),
@@ -90,7 +90,7 @@ app.post("/rooms", async (req: Request, res: Response) => {
     const payload = createRoomSchema.parse(req.body);
 
     // Derive blinds from ante when not supplied; blinds remain stored for min-raise math
-    const effectiveBigBlind = payload.bigBlind ?? Math.max(payload.bombPotAnte, 2);
+    const effectiveBigBlind = payload.bigBlind ?? Math.max(payload.bombPotAnte ?? 0, 2);
     let effectiveSmallBlind =
       payload.smallBlind ?? Math.max(1, Math.min(effectiveBigBlind - 1, Math.floor(effectiveBigBlind / 2)));
 
