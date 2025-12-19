@@ -209,7 +209,11 @@ export default function RoomPage({
       return;
     }
 
-    const maxRebuy = room ? room.max_buy_in - myPlayer.chip_stack : 0;
+    const maxRebuy = room ? Math.max(0, room.max_buy_in - myPlayer.chip_stack) : 0;
+    if (maxRebuy <= 0) {
+      alert("You're already at the maximum buy-in");
+      return;
+    }
     if (rebuyAmount > maxRebuy) {
       alert(`Maximum rebuy amount is $${maxRebuy}`);
       return;

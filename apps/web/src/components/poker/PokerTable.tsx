@@ -58,11 +58,6 @@ export function PokerTable({
   const holeCardCount = gameMode === "texas_holdem" ? 2 : 4;
   const holeCardRotationStep = holeCardCount === 2 ? 6 : 8;
   const holeCardSpread = holeCardCount === 2 ? (isMobile ? 14 : 18) : (isMobile ? 12 : 16);
-  const holeCardFanWidth = Math.max(
-    holeCardCount * (isMobile ? 26 : 32),
-    isMobile ? 60 : 84,
-  );
-  const holeCardFanHeight = isMobile ? 52 : 64;
 
   // Get seated players (not spectators)
   const seatedPlayers = players.filter((p) => !p.is_spectating);
