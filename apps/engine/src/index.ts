@@ -145,7 +145,7 @@ app.post("/rooms", async (req: Request, res: Response) => {
         min_buy_in: payload.minBuyIn,
         max_buy_in: payload.maxBuyIn,
         max_players: payload.maxPlayers ?? 9,
-        inter_hand_delay: payload.interHandDelay ?? 5,
+        inter_hand_delay: payload.interHandDelay ?? 0,
         pause_after_hand: payload.pauseAfterHand ?? false,
         game_mode: gameMode,
         owner_auth_user_id: userId,
@@ -672,6 +672,20 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
         shown_hands: null,
       });
       if (resultsErr) throw resultsErr;
+
+      // Mark hand as completed with timestamp for frontend countdown timer
+      const { error: updateErr } = await supabase
+        .from("game_states")
+        .update({ hand_completed_at: new Date().toISOString() })
+        .eq("id", gameState.id);
+
+      if (updateErr) {
+        logger.error({ err: updateErr }, "failed to update game_state with hand_completed_at");
+        throw updateErr;
+      }
+
+      // Wait 5 seconds before deleting game state to allow players to chat and see results
+      await new Promise(resolve => setTimeout(resolve, 5000));
 
       // Delete game state to trigger hand completion
       const { error: deleteErr } = await supabase

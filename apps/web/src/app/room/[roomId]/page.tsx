@@ -40,6 +40,9 @@ export default function RoomPage({
   const [nextHandCountdown, setNextHandCountdown] = useState<number | null>(
     null,
   );
+  const [handCompletionCountdown, setHandCompletionCountdown] = useState<
+    number | null
+  >(null);
 
   const myPlayer = players.find((p) => p.auth_user_id === sessionId);
   const isMyTurn =
@@ -89,6 +92,40 @@ export default function RoomPage({
       supabase.removeChannel(channel);
     };
   }, [roomId]);
+
+  // Show countdown timer when hand completes (hand_completed_at is set)
+  useEffect(() => {
+    if (!gameState?.hand_completed_at) {
+      setHandCompletionCountdown(null);
+      return;
+    }
+
+    const completedAt = new Date(
+      gameState.hand_completed_at as unknown as string,
+    ).getTime();
+    const now = Date.now();
+    const elapsed = now - completedAt;
+    const delayMs = 5000;
+
+    if (elapsed >= delayMs) {
+      setHandCompletionCountdown(null);
+      return;
+    }
+
+    // Show countdown
+    const countdownInterval = setInterval(() => {
+      const currentElapsed = Date.now() - completedAt;
+      const remaining = Math.ceil((delayMs - currentElapsed) / 1000);
+      setHandCompletionCountdown(remaining > 0 ? remaining : null);
+
+      if (currentElapsed >= delayMs) {
+        clearInterval(countdownInterval);
+        setHandCompletionCountdown(null);
+      }
+    }, 100);
+
+    return () => clearInterval(countdownInterval);
+  }, [gameState?.hand_completed_at]);
 
   // Auto-deal next hand after current hand ends
   useEffect(() => {
@@ -442,18 +479,13 @@ export default function RoomPage({
     : "grid-rows-[auto_1fr]";
 
   const gameModeLabel =
-    room?.game_mode === "texas_holdem"
-      ? "Texas Hold'em"
-      : room?.game_mode === "double_board_bomb_pot_plo"
-        ? "Double Board Bomb Pot PLO"
-        : "Loading game...";
+    room?.game_mode === "double_board_bomb_pot_plo"
+      ? "Double Board Bomb Pot PLO"
+      : "Loading game...";
 
-  const stakesLabel =
-    room?.game_mode === "texas_holdem"
-      ? `Blinds: ${room.small_blind}/${room.big_blind}`
-      : room
-        ? `Bomb pot ante (BB): ${room.big_blind}`
-        : "Loading stakes...";
+  const stakesLabel = room
+    ? `Bomb pot ante (BB): ${room.big_blind}`
+    : "Loading stakes...";
 
   return (
     <div
@@ -546,6 +578,14 @@ export default function RoomPage({
               >
                 Deal Hand
               </button>
+            )}
+            {handCompletionCountdown !== null && (
+              <div
+                className="w-full sm:w-auto rounded-md bg-black/40 border border-whiskey-gold/50 px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-semibold text-whiskey-gold"
+                style={{ fontFamily: "Lato, sans-serif" }}
+              >
+                Next hand in {handCompletionCountdown}s...
+              </div>
             )}
             {nextHandCountdown !== null && (
               <div

@@ -31,7 +31,6 @@ export function PokerTable({
   potSize = 0,
   sidePots = [],
   phase,
-  gameMode,
   onSeatClick,
 }: PokerTableProps) {
   // Detect mobile viewport without triggering hydration mismatch
@@ -62,11 +61,10 @@ export function PokerTable({
     ? "clamp(68px, 21vw, 104px)"
     : "clamp(96px, 14vw, 136px)";
 
-  // Hole card count depends on game type (2 for Hold'em, 4 for PLO variants)
-  const holeCardCount = gameMode === "texas_holdem" ? 2 : 4;
-  const holeCardRotationStep = holeCardCount === 2 ? 6 : 8;
-  const holeCardSpread =
-    holeCardCount === 2 ? (isMobile ? 14 : 18) : isMobile ? 12 : 16;
+  // Hole card count depends on game type (4 for PLO variants)
+  const holeCardCount = 4;
+  const holeCardRotationStep = 8;
+  const holeCardSpread = isMobile ? 12 : 16;
 
   // Get seated players (not spectators)
   const seatedPlayers = players.filter((p) => !p.is_spectating);

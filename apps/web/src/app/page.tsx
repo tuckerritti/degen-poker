@@ -23,8 +23,8 @@ const GAME_MODES: GameModeConfig[] = [
   {
     id: "texas_holdem",
     name: "Texas Hold'em",
-    enabled: true,
-    description: "2 hole cards, 1 board, standard blinds",
+    enabled: false,
+    description: "2 hole cards, 1 board, standard blinds (Coming soon)",
   },
 ];
 
