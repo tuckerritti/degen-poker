@@ -13,7 +13,7 @@ const app = express();
 app.use(
   cors({
     origin: corsOrigin === "*" ? true : corsOrigin,
-    methods: ["GET", "POST", "OPTIONS"],
+    methods: ["GET", "POST", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
@@ -318,6 +318,65 @@ app.post("/rooms/:roomId/start-hand", async (req: Request, res: Response) => {
   }
 });
 
+app.patch("/rooms/:roomId/pause", async (req: Request, res: Response) => {
+  try {
+    const userId = await requireUser(req, res);
+    if (!userId) return;
+
+    const roomId = req.params.roomId;
+    const room = await fetchRoom(roomId);
+    if (!room) return res.status(404).json({ error: "Room not found" });
+
+    if (!room.is_active) {
+      return res.status(400).json({ error: "Room not active" });
+    }
+
+    if (room.owner_auth_user_id && room.owner_auth_user_id !== userId) {
+      return res.status(403).json({ error: "Only the room owner can pause/unpause" });
+    }
+
+    const gameState = await fetchLatestGameState(roomId);
+
+    let updates: { is_paused?: boolean; pause_after_hand?: boolean; last_activity_at: string };
+
+    if (room.is_paused) {
+      // Unpause: clear both flags
+      updates = {
+        is_paused: false,
+        pause_after_hand: false,
+        last_activity_at: new Date().toISOString(),
+      };
+    } else if (gameState) {
+      // Hand in progress: schedule pause after hand
+      updates = {
+        pause_after_hand: true,
+        last_activity_at: new Date().toISOString(),
+      };
+    } else {
+      // No active hand: pause immediately
+      updates = {
+        is_paused: true,
+        last_activity_at: new Date().toISOString(),
+      };
+    }
+
+    const { data: updatedRoom, error: updateErr } = await supabase
+      .from("rooms")
+      .update(updates)
+      .eq("id", roomId)
+      .select()
+      .single();
+
+    if (updateErr) throw updateErr;
+
+    res.json({ room: updatedRoom });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    logger.error({ err }, "failed to toggle pause");
+    res.status(500).json({ error: message });
+  }
+});
+
 app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
   const roomId = req.params.roomId;
   const payloadResult = actionSchema.safeParse(req.body);
@@ -510,7 +569,9 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
         );
         const withChips = activeSeated.filter((p) => (p.chip_stack ?? 0) > 0);
         const shouldAutoPause = activeSeated.length === 2 && withChips.length === 1;
-        if (shouldAutoPause) {
+
+        // Pause if: (1) heads-up bust, or (2) pause_after_hand flag is set
+        if (shouldAutoPause || room.pause_after_hand) {
           const { error: pauseErr } = await supabase
             .from("rooms")
             .update({

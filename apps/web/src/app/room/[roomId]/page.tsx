@@ -233,7 +233,23 @@ export default function RoomPage({
   };
 
   const handleTogglePause = async () => {
-    alert("Pause/unpause is not yet wired to the engine.");
+    if (!safeEngineUrl()) {
+      alert("Engine URL not configured");
+      return;
+    }
+    try {
+      await engineFetch(`/rooms/${roomId}/pause`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+      // Real-time subscription will update UI automatically
+    } catch (error) {
+      console.error("Error toggling pause:", error);
+      alert("Failed to toggle pause");
+    }
   };
 
   const handleAction = async (actionType: string, amount?: number) => {
