@@ -49,20 +49,17 @@ export function PokerTable({
     return () => mediaQuery.removeEventListener("change", handler);
   }, []);
 
-  // Rotate felt sideways on mobile for better use of vertical space; seats stay upright
-  const tableRotation = isMobile ? 90 : 0;
-  // Enlarge felt on mobile only (cards/seats unaffected)
-  const tableScale = isMobile ? 1.3 : 1;
+  // Portrait-friendly rectangular table on mobile
+  const tableRotation = isMobile ? 0 : 90;
+  const tableScale = 1;
+  const seatBoxWidth = isMobile
+    ? "clamp(68px, 21vw, 104px)"
+    : "clamp(96px, 14vw, 136px)";
 
   // Hole card count depends on game type (2 for Hold'em, 4 for PLO variants)
   const holeCardCount = gameMode === "texas_holdem" ? 2 : 4;
   const holeCardRotationStep = holeCardCount === 2 ? 6 : 8;
   const holeCardSpread = holeCardCount === 2 ? (isMobile ? 14 : 18) : (isMobile ? 12 : 16);
-  const holeCardFanWidth = Math.max(
-    holeCardCount * (isMobile ? 26 : 32),
-    isMobile ? 60 : 84,
-  );
-  const holeCardFanHeight = isMobile ? 52 : 64;
 
   // Get seated players (not spectators)
   const seatedPlayers = players.filter((p) => !p.is_spectating);
@@ -71,13 +68,57 @@ export function PokerTable({
   // Check if current user already has a seat
   const userHasSeat = seatedPlayers.some((p) => p.id === myPlayerId);
 
+  const rotatePoint = (x: number, y: number, degrees: number) => {
+    const rad = (degrees * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const dx = x - 50;
+    const dy = y - 50;
+    return {
+      x: 50 + dx * cos - dy * sin,
+      y: 50 + dx * sin + dy * cos,
+    };
+  };
+
   // Calculate seat positions on a flattened "stadium" path so ends feel rounded
   const getSeatPosition = (seatNumber: number) => {
+    if (isMobile && maxPlayers === 9) {
+      const mobileMap: Array<{ x: number; y: number }> = [
+        { x: 50, y: 12 }, // top
+        { x: 18, y: 26 },
+        { x: 18, y: 48 },
+        { x: 18, y: 70 },
+        { x: 82, y: 24 },
+        { x: 82, y: 42 },
+        { x: 82, y: 60 },
+        { x: 82, y: 78 },
+        { x: 50, y: 88 }, // bottom
+      ];
+      const base = mobileMap[seatNumber] ?? { x: 50, y: 50 };
+      return tableRotation !== 0 ? rotatePoint(base.x, base.y, tableRotation) : base;
+    }
+
+    if (!isMobile && maxPlayers === 9) {
+      const desktopMap: Array<{ x: number; y: number }> = [
+        { x: 50, y: 16 }, // top
+        { x: 22, y: 26 },
+        { x: 22, y: 50 },
+        { x: 22, y: 74 },
+        { x: 78, y: 26 },
+        { x: 78, y: 42 },
+        { x: 78, y: 58 },
+        { x: 78, y: 74 },
+        { x: 50, y: 88 }, // bottom
+      ];
+      const base = desktopMap[seatNumber] ?? { x: 50, y: 50 };
+      return tableRotation !== 0 ? rotatePoint(base.x, base.y, tableRotation) : base;
+    }
+
     const angle = (seatNumber / maxPlayers) * 2 * Math.PI - Math.PI / 2;
     // "Superellipse" keeps top/bottom tight while giving straight-ish sides
     // Mobile: pull seats inward on the x-axis, stretch on y-axis to use vertical space
-    const radiusX = isMobile ? 38 : 48;
-    const radiusY = isMobile ? 52 : 38;
+    const radiusX = isMobile ? 31 : 46;
+    const radiusY = isMobile ? 56 : 40;
     const n = 4; // higher = squarer sides
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
@@ -91,11 +132,20 @@ export function PokerTable({
       radiusY *
         Math.sign(sin) *
         Math.pow(Math.abs(sin), 2 / n);
-    return { x, y };
+    const base = { x, y };
+    return tableRotation !== 0 ? rotatePoint(base.x, base.y, tableRotation) : base;
   };
 
   return (
-    <div className="relative mx-auto aspect-[3/2] sm:aspect-[4/3] w-full max-w-[100vw] sm:max-w-5xl max-h-[98vh] sm:max-h-none overflow-visible">
+    <div
+      className="relative mx-auto aspect-[3/5] sm:aspect-[4/3] w-full overflow-visible"
+      style={{
+        maxWidth: isMobile ? "min(460px, 92vw)" : "min(1240px, 96vw)",
+        maxHeight: isMobile ? "52vh" : "82vh",
+        minHeight: isMobile ? "300px" : "440px",
+        height: "100%",
+      }}
+    >
       {/* Poker table surface */}
       <div className="absolute inset-0 flex items-center justify-center p-0 sm:p-8">
         <div
@@ -104,32 +154,42 @@ export function PokerTable({
         >
           <svg
             className="h-full w-full"
-            viewBox="-4 -4 108 68"
+            viewBox="0 0 100 160"
             preserveAspectRatio="xMidYMid meet"
             style={{ overflow: "visible" }}
           >
             <defs>
               <linearGradient id="felt" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#14213d" />
-                <stop offset="100%" stopColor="#0f1b33" />
+                <stop offset="0%" stopColor="#1c7b32" />
+                <stop offset="100%" stopColor="#0f4d22" />
               </linearGradient>
               <linearGradient id="rail" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#4f1b1b" />
-                <stop offset="100%" stopColor="#2d0f0f" />
+                <stop offset="0%" stopColor="#1b1b1f" />
+                <stop offset="100%" stopColor="#0f1014" />
               </linearGradient>
             </defs>
 
-            {/* Outer rail with stadium silhouette */}
-            <path
-              d="M25 5 H75 A25 25 0 0 1 100 30 A25 25 0 0 1 75 55 H25 A25 25 0 0 1 0 30 A25 25 0 0 1 25 5 Z"
+            {/* Outer rail - rounded rectangle */}
+            <rect
+              x="5"
+              y="5"
+              width="90"
+              height="150"
+              rx="14"
+              ry="14"
               fill="url(#rail)"
-              stroke="#5e2525"
+              stroke="#2a2a2f"
               strokeWidth="1.5"
             />
 
             {/* Inner felt */}
-            <path
-              d="M28 10 H72 A20 20 0 0 1 92 30 A20 20 0 0 1 72 50 H28 A20 20 0 0 1 8 30 A20 20 0 0 1 28 10 Z"
+            <rect
+              x="12"
+              y="12"
+              width="76"
+              height="136"
+              rx="12"
+              ry="12"
               fill="url(#felt)"
               stroke="#e0c58f"
               strokeWidth="0.8"
@@ -139,12 +199,12 @@ export function PokerTable({
             {/* Inscription */}
             <text
               x="50"
-              y="33"
+              y="85"
               textAnchor="middle"
               fontSize="5"
               fontFamily="Cinzel, serif"
               letterSpacing="0.25"
-              fill="#0b152a" // slightly darker than the felt for subtle emboss
+              fill="#0b4120"
               opacity="0.7"
             >
               DEGENERATE
@@ -162,13 +222,21 @@ export function PokerTable({
         const isCurrentActor = currentActorSeat === seatNumber;
         const isEmpty = !player;
         const hasButton = buttonSeat === seatNumber;
+        const holeCardsOffsetClass =
+          isMyPlayer && myHoleCards.length > 0
+            ? isMobile
+              ? "-top-16"
+              : "-top-28"
+            : isMobile
+              ? "-top-12"
+              : "-top-20";
 
         return (
           <button
             key={seatNumber}
             onClick={() => isEmpty && !userHasSeat && onSeatClick(seatNumber)}
             disabled={!isEmpty || userHasSeat}
-            className={`absolute -translate-x-1/2 -translate-y-1/2 transition-all ${
+            className={`absolute -translate-x-1/2 -translate-y-1/2 transition-all z-10 ${
               isEmpty && !userHasSeat
                 ? "cursor-pointer hover:scale-105"
                 : "cursor-default"
@@ -180,7 +248,7 @@ export function PokerTable({
           >
             {/* Seat container */}
             <div
-              className={`relative z-10 min-w-20 sm:min-w-28 lg:min-w-32 rounded-lg border-2 px-2 py-2 sm:px-4 sm:py-3 shadow-lg backdrop-blur-md ${
+              className={`relative z-10 rounded-lg border-2 px-2 py-2 sm:px-4 sm:py-3 shadow-lg backdrop-blur-md ${
                 isEmpty && !userHasSeat
                   ? "border-white/20 bg-black/40 hover:border-whiskey-gold/50 hover:bg-black/50"
                   : isEmpty && userHasSeat
@@ -193,22 +261,22 @@ export function PokerTable({
                   ? "ring-2 sm:ring-4 ring-whiskey-gold ring-offset-1 sm:ring-offset-2 ring-offset-royal-blue glow-gold"
                   : ""
               }`}
-              style={{ fontFamily: "Lato, sans-serif" }}
+              style={{ fontFamily: "Lato, sans-serif", width: seatBoxWidth }}
             >
               {isEmpty ? (
                 <div className="text-center">
-                  <div className="text-xs font-semibold text-cigar-ash">
+                  <div className="text-[11px] sm:text-xs font-semibold text-cigar-ash">
                     Seat {seatNumber + 1}
                   </div>
                   {!userHasSeat && (
-                    <div className="text-xs text-cigar-ash hidden sm:block">
+                    <div className="text-[10px] sm:text-[11px] text-cigar-ash hidden sm:block">
                       Click to sit
                     </div>
                   )}
                 </div>
               ) : (
                 <div className="text-center">
-                  <div className="text-xs sm:text-sm font-bold text-cream-parchment truncate">
+                  <div className="text-[11px] sm:text-sm font-bold text-cream-parchment truncate">
                     {player.display_name}
                   </div>
                   <div
@@ -255,18 +323,16 @@ export function PokerTable({
               </div>
             )}
 
-            {/* Player Hole Cards - shown above seat */}
-            {!isEmpty && phase && !player.has_folded && (
-              <div
-                className={`absolute left-1/2 -translate-x-1/2 ${
-                  isMyPlayer && myHoleCards.length > 0
-                    ? "-top-18 sm:-top-28 z-10"
-                    : "-top-14 sm:-top-20 z-0"
-                }`}
-              >
-                {isMyPlayer && myHoleCards.length > 0 ? (
-                  // My cards: spread out horizontally
-                  <div className="flex gap-0.5 sm:gap-1">
+            {/* Player Hole Cards - hide other players' face-down cards on mobile to save space */}
+            {!isEmpty && phase && !player.has_folded && (!isMobile || isMyPlayer) && (
+                  <div
+                    className={`absolute left-1/2 -translate-x-1/2 ${holeCardsOffsetClass} ${
+                      isMyPlayer && myHoleCards.length > 0 ? "z-10" : "z-0"
+                    }`}
+                  >
+                    {isMyPlayer && myHoleCards.length > 0 ? (
+                      // My cards: spread out horizontally
+                      <div className="flex gap-0.5 sm:gap-1">
                     {myHoleCards
                       .filter((card) => card != null)
                       .map((card, index) => (
@@ -275,13 +341,13 @@ export function PokerTable({
                   </div>
                 ) : (
                   // Other players: fanned out face-down cards
-                  <div
-                    className="relative flex items-center justify-center"
-                    style={{
-                      width: isMobile ? "80px" : "100px",
-                      height: isMobile ? "52px" : "64px",
-                    }}
-                  >
+                    <div
+                      className="relative flex items-center justify-center"
+                      style={{
+                        width: isMobile ? "clamp(64px, 24vw, 96px)" : "clamp(96px, 18vw, 120px)",
+                        height: isMobile ? "52px" : "64px",
+                      }}
+                    >
                     {Array.from({ length: holeCardCount }, (_, cardIndex) => {
                       const centerOffset = (holeCardCount - 1) / 2;
                       const rotation = (cardIndex - centerOffset) * holeCardRotationStep;
@@ -309,11 +375,14 @@ export function PokerTable({
       })}
 
       {/* Center - Community Cards and Pot */}
-      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
+      <div
+        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center sm:flex-row sm:items-center gap-3 sm:gap-6 z-30"
+        style={{ maxWidth: "min(90vw, 880px)" }}
+      >
         {/* Pot Display (left on desktop, below on mobile) */}
-        <div className="order-2 sm:order-1 flex flex-col gap-2">
+        <div className="order-2 sm:order-1 flex flex-col gap-2 w-full sm:w-auto max-w-[min(82vw,320px)]">
           {/* Main pot */}
-          <div className="glass rounded-lg px-3 sm:px-4 py-1 sm:py-1.5 border border-whiskey-gold/30 shadow-lg">
+          <div className="glass rounded-lg px-3 sm:px-4 py-1 sm:py-1.5 border border-whiskey-gold/30 shadow-lg w-fit max-w-full mx-auto">
             <div className="text-center">
               <div
                 className="text-base sm:text-xl font-bold text-whiskey-gold glow-gold"
@@ -331,7 +400,7 @@ export function PokerTable({
           {sidePots && sidePots.length > 1 && sidePots.slice(1).map((sidePot, idx) => (
             <div
               key={idx}
-              className="glass rounded-lg px-3 sm:px-4 py-1 sm:py-1.5 border border-whiskey-gold/20 shadow-lg"
+              className="glass rounded-lg px-3 sm:px-4 py-1 sm:py-1.5 border border-whiskey-gold/20 shadow-lg w-fit max-w-full mx-auto"
             >
               <div className="text-center">
                 <div

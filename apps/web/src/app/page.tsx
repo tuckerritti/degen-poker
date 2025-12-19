@@ -65,6 +65,13 @@ export default function Home() {
 
     try {
       const isPLO = selectedMode === "double_board_bomb_pot_plo";
+      const normalizedAnte = isPLO ? Math.max(1, bombPotAnte || 1) : undefined;
+      const normalizedSmallBlind = isPLO
+        ? Math.max(1, Math.floor((normalizedAnte ?? 1) / 2))
+        : Math.max(1, smallBlind);
+      const normalizedBigBlind = isPLO
+        ? normalizedAnte ?? 1
+        : Math.max(1, bigBlind);
 
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_ENGINE_URL.replace(/\/+$/, "")}/rooms`,
@@ -75,13 +82,13 @@ export default function Home() {
           ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify({
-          // Bomb pot PLO is ante-only; blinds are set to (0, ante) to satisfy engine schema
-          smallBlind: isPLO ? 0 : smallBlind,
-          bigBlind: isPLO ? bombPotAnte : bigBlind,
+          // Bomb pot PLO: use ante-sized blinds to satisfy engine schema (>0)
+          smallBlind: normalizedSmallBlind,
+          bigBlind: normalizedBigBlind,
           minBuyIn,
           maxBuyIn,
           gameMode: selectedMode,
-          ...(isPLO && { bombPotAnte }),
+          ...(isPLO && { bombPotAnte: normalizedAnte }),
           ownerAuthUserId: sessionId,
         }),
         },
