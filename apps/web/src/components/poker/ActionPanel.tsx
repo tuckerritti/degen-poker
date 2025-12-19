@@ -168,7 +168,10 @@ export function ActionPanel({
   if (limits.canRaise) {
     mobileActions.push({
       key: "raise",
-      label: currentBet === 0 ? `Bet $${targetTotalBet}` : `Raise $${targetTotalBet}`,
+      label:
+        currentBet === 0
+          ? `Bet $${targetTotalBet}`
+          : `Raise $${targetTotalBet}`,
       onClick: () =>
         handleAction(currentBet === 0 ? "bet" : "raise", targetTotalBet),
       disabled:
@@ -339,7 +342,9 @@ export function ActionPanel({
                   </button>
                   <button
                     onClick={() => setExtraAmount(extraMax)}
-                    disabled={disabled || isSubmitting || playerChips > limits.maxBet}
+                    disabled={
+                      disabled || isSubmitting || playerChips > limits.maxBet
+                    }
                     className="rounded bg-mahogany border border-white/10 px-2 py-2 text-xs sm:text-xs text-cream-parchment hover:border-whiskey-gold/50 disabled:opacity-50 transition-colors"
                   >
                     All-In

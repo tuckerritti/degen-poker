@@ -31,20 +31,20 @@ This document outlines how we will rebuild the poker platform into a Turborepo m
 
 ## Architecture Blueprint
 
-1) **Data Flow**
+1. **Data Flow**
    - Web sends intent (join, action, pause) → Engine validates → writes authoritative rows to Supabase → Supabase realtime notifies web → web updates UI.
    - Private info (hole cards) stored in `player_hands` with RLS on `session_id`; public state in `game_states`.
    - Deterministic deck seeds stored per hand for auditability.
 
-2) **APIs**
+2. **APIs**
    - Engine exposes `POST /rooms`, `POST /rooms/{id}/join`, `POST /actions`, `POST /hands/{id}/resolve`, etc., or tRPC equivalents.
    - Web never writes directly to tables (except minimal auth/session bootstrap if kept).
 
-3) **State Machines**
+3. **State Machines**
    - Engine maintains a finite-state machine for hand phases: `preflop → flop → turn → river → showdown → cleanup`.
    - Timers for action deadlines and auto-resolve handled by engine; stored deadlines mirrored in DB for transparency.
 
-4) **Observability**
+4. **Observability**
    - Structured logging (pino) with request IDs; audit tables for critical transitions.
    - Metrics hooks (later): action latency, hand duration, rake (if added).
 
@@ -53,11 +53,13 @@ This document outlines how we will rebuild the poker platform into a Turborepo m
 ## Implementation Plan (Phased)
 
 ### Phase 0 – Repo Scaffolding (current)
+
 - ✅ Turborepo layout (`apps/web`, `apps/engine`, `packages/shared`, `supabase/`).
 - ✅ Frontend preserved; backend code removed; migrations cleared except `config.toml`.
 - ✅ Shared package stubbed; engine placeholder present.
 
 ### Phase 1 – Schema & Types
+
 - Recreate Supabase schema:
   - Tables: `rooms`, `room_players`, `game_states`, `player_hands`, `player_actions`, `hand_results`.
   - RLS: ensure `player_hands` filtered by `session_id`; `room_players` filtered by `room_id` and ownership rules.
@@ -67,6 +69,7 @@ This document outlines how we will rebuild the poker platform into a Turborepo m
 - Publish shared enums/constants to `packages/shared` (game modes, phases, action types).
 
 ### Phase 2 – Engine Service
+
 - Choose transport: start with REST (Express/Fastify) or tRPC; keep interfaces in `packages/shared`.
 - Implement modules:
   - `deck`: deterministic shuffler by seed.
@@ -78,18 +81,21 @@ This document outlines how we will rebuild the poker platform into a Turborepo m
 - Logging: pino with requestId; emit structured events for auditing.
 
 ### Phase 3 – Frontend Wiring
+
 - Replace direct Supabase writes with Engine API calls (fetch/tRPC).
 - Keep realtime subscriptions for `game_states` and `room_players`; hook updates remain similar.
 - Update hooks to read from `@shared` types and generated Supabase types.
 - Add config for engine base URL (env in `apps/web/.env`).
 
 ### Phase 4 – Testing & Quality
+
 - Unit tests for engine state machine and pot splitting.
 - Contract tests between web and engine (mock Supabase).
 - Migration tests: `supabase db lint` or local `supabase db diff`.
 - Lint/typecheck in CI via Turbo pipelines.
 
 ### Phase 5 – Deployment Readiness
+
 - Containerize engine; define Fly/Render/Vercel functions deployment (TBD).
 - Supabase project setup and secrets management.
 - Edge cache rules for static assets; incremental static regeneration if needed.
@@ -97,6 +103,7 @@ This document outlines how we will rebuild the poker platform into a Turborepo m
 ---
 
 ## Deliverables Checklist
+
 - [ ] Supabase schema migrations reintroduced under `supabase/migrations/`
 - [ ] Generated types in `apps/web/src/types/`
 - [ ] Shared enums/constants in `packages/shared`
@@ -107,6 +114,7 @@ This document outlines how we will rebuild the poker platform into a Turborepo m
 ---
 
 ## Open Decisions
+
 - Transport choice: REST vs. tRPC; lean REST if external integrations expected.
 - Reuse existing hand evaluator vs. custom evaluator; confirm licensing and performance needs.
 - Hosting model for engine (serverless vs. long-lived timers). Initial path: long-lived service to manage timers reliably.

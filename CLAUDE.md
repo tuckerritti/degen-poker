@@ -66,6 +66,7 @@ supabase/
 ### Service Separation
 
 **Engine Service** (`apps/engine`, port 3001):
+
 - Express REST API with Zod validation
 - Uses Supabase **service role** key to bypass RLS
 - Handles all game logic (dealing, action processing, payouts)
@@ -73,6 +74,7 @@ supabase/
 - No authentication - players identified by seat number + optional `auth_user_id`
 
 **Web Frontend** (`apps/web`, port 3000):
+
 - Next.js 16 with app router
 - Calls engine API via `engineClient.ts` helper
 - Subscribes to Supabase real-time updates for UI reactivity
@@ -111,22 +113,26 @@ The application prevents players from seeing each other's hole cards through a *
 All real-time updates use Supabase `postgres_changes` subscriptions:
 
 **`useGameState(roomId)`** (`apps/web/src/lib/hooks/useGameState.ts`):
+
 - Subscribes to `game_states` filtered by `room_id`
 - Updates on pot changes, phase transitions, board reveals
 - Handles DELETE events when hand completes
 
 **`usePlayerHand(roomId, authUserId)`**:
+
 - Subscribes to `player_hands` filtered by `auth_user_id`
 - RLS ensures players only receive their own cards
 - Critical anti-cheating measure
 
 **`useRoomPlayers(roomId)`**:
+
 - Subscribes to `room_players` table
 - Updates when players join/leave or chip stacks change
 
 ### Data Flow
 
 **Starting a Hand:**
+
 1. Web calls `POST /rooms/:roomId/start-hand` on engine
 2. Engine calls `dealHand()` from `logic.ts`:
    - Generates `deck_seed` (UUID)
@@ -142,6 +148,7 @@ All real-time updates use Supabase `postgres_changes` subscriptions:
 4. Web receives real-time updates via subscriptions
 
 **Processing Actions:**
+
 1. Web calls `POST /rooms/:roomId/actions` on engine
 2. Engine validates turn order, fetches `game_state_secrets`
 3. Engine calls `applyAction()` from `logic.ts`:
@@ -153,6 +160,7 @@ All real-time updates use Supabase `postgres_changes` subscriptions:
 5. Web receives real-time update with new phase/board
 
 **Hand Completion:**
+
 - Triggered automatically when only one player remains or river completes
 - Engine determines winners (currently splits pot equally - **TODO: implement PLO hand evaluation**)
 - Engine calls `endOfHandPayout()` to distribute pot
@@ -165,14 +173,16 @@ All real-time updates use Supabase `postgres_changes` subscriptions:
 ### Supabase Client Usage
 
 **Engine (server-side):**
+
 ```typescript
-import { supabase } from "./supabase.js";  // Uses service role key
+import { supabase } from "./supabase.js"; // Uses service role key
 ```
 
 **Web (client-side):**
+
 ```typescript
 import { getBrowserClient } from "@/lib/supabase/client";
-const supabase = getBrowserClient();  // Uses publishable key
+const supabase = getBrowserClient(); // Uses publishable key
 ```
 
 ### Calling Engine API from Web
@@ -239,6 +249,7 @@ const cards = playerHand.cards as unknown as string[];
 ```
 
 **Common JSONB fields:**
+
 - `game_states.board_state`: `{ board1: ["Ah", "Kh", "7d"], board2: [...] }`
 - `player_hands.cards`: `["As", "Ks", "Qh", "Jh"]` (4 PLO hole cards)
 - `game_states.action_history`: Array of action objects
@@ -257,6 +268,7 @@ const cards = playerHand.cards as unknown as string[];
 - `hand_results` - Archive of completed hands
 
 **RLS Policies:**
+
 - Most tables allow public reads (`for select using (true)`)
 - Writes restricted to `service_role`
 - `player_hands` has special policy: `for select using (auth.uid() = auth_user_id)`
@@ -273,6 +285,7 @@ const cards = playerHand.cards as unknown as string[];
 ## Environment Setup
 
 **Engine** (`apps/engine/.env.local`):
+
 ```
 SUPABASE_URL=http://127.0.0.1:54321
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
@@ -281,6 +294,7 @@ CORS_ORIGIN=http://localhost:3000
 ```
 
 **Web** (`apps/web/.env.local`):
+
 ```
 NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-anon-key
@@ -300,6 +314,7 @@ Copy from `apps/engine/env.sample` and `apps/web/env.sample`.
 4. **Deck shuffling:** Always use `shuffleDeck(seed)` with the seed from `game_state_secrets.deck_seed`. Never generate new seeds when revealing turn/river cards.
 
 5. **JSONB updates:** Create new objects when updating board state:
+
    ```typescript
    const updatedBoardState = {
      board1: [...existingBoard1, newCard],

@@ -1,8 +1,8 @@
-import type { Room } from '../../src/types.js';
+import type { Room } from "../../src/types.js";
 
 export const standardRoom: Room = {
-  id: 'test-room-1',
-  game_mode: 'double_board_bomb_pot_plo',
+  id: "test-room-1",
+  game_mode: "double_board_bomb_pot_plo",
   max_players: 9,
   min_buy_in: 100,
   max_buy_in: 1000,
@@ -15,5 +15,5 @@ export const standardRoom: Room = {
   pause_after_hand: false,
   is_active: true,
   last_activity_at: null,
-  owner_auth_user_id: null
+  owner_auth_user_id: null,
 };

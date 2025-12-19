@@ -18,7 +18,11 @@ export default function RoomPage({
 }) {
   const { roomId } = use(params);
   const { sessionId, accessToken, isLoading: sessionLoading } = useSession();
-  const { players, loading: playersLoading, refetch: refetchPlayers } = useRoomPlayers(roomId);
+  const {
+    players,
+    loading: playersLoading,
+    refetch: refetchPlayers,
+  } = useRoomPlayers(roomId);
   const { gameState } = useGameState(roomId);
   const { playerHand } = usePlayerHand(roomId, sessionId);
 
@@ -125,11 +129,15 @@ export default function RoomPage({
       const dealTimer = setTimeout(async () => {
         try {
           if (!safeEngineUrl()) return;
-          const response = await engineFetch(`/rooms/${roomId}/start-hand`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({}),
-          }, accessToken);
+          const response = await engineFetch(
+            `/rooms/${roomId}/start-hand`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({}),
+            },
+            accessToken,
+          );
 
           if (!response.ok) {
             const data = await response.json();
@@ -170,15 +178,19 @@ export default function RoomPage({
         alert("Engine URL not configured");
         return;
       }
-      const response = await engineFetch(`/rooms/${roomId}/join`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          displayName,
-          seatNumber: selectedSeat,
-          buyIn: buyInAmount,
-        }),
-      }, accessToken);
+      const response = await engineFetch(
+        `/rooms/${roomId}/join`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            displayName,
+            seatNumber: selectedSeat,
+            buyIn: buyInAmount,
+          }),
+        },
+        accessToken,
+      );
 
       const data = await response.json();
 
@@ -209,7 +221,9 @@ export default function RoomPage({
       return;
     }
 
-    const maxRebuy = room ? Math.max(0, room.max_buy_in - myPlayer.chip_stack) : 0;
+    const maxRebuy = room
+      ? Math.max(0, room.max_buy_in - myPlayer.chip_stack)
+      : 0;
     if (maxRebuy <= 0) {
       alert("You're already at the maximum buy-in");
       return;
@@ -232,7 +246,7 @@ export default function RoomPage({
             rebuyAmount: rebuyAmount,
           }),
         },
-        accessToken
+        accessToken,
       );
 
       if (!response.ok) {
@@ -260,11 +274,15 @@ export default function RoomPage({
       return;
     }
     try {
-      const response = await engineFetch(`/rooms/${roomId}/start-hand`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      }, accessToken);
+      const response = await engineFetch(
+        `/rooms/${roomId}/start-hand`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        },
+        accessToken,
+      );
 
       const data = await response.json();
 
@@ -283,13 +301,17 @@ export default function RoomPage({
       return;
     }
     try {
-      const response = await engineFetch(`/rooms/${roomId}/pause`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
+      const response = await engineFetch(
+        `/rooms/${roomId}/pause`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
         },
-      }, accessToken);
+        accessToken,
+      );
 
       const data = await response.json();
 
@@ -317,16 +339,20 @@ export default function RoomPage({
       return;
     }
     try {
-      const response = await engineFetch(`/rooms/${roomId}/actions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          seatNumber: myPlayer.seat_number,
-          actionType,
-          amount,
-          idempotencyKey: crypto.randomUUID(),
-        }),
-      }, accessToken);
+      const response = await engineFetch(
+        `/rooms/${roomId}/actions`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            seatNumber: myPlayer.seat_number,
+            actionType,
+            amount,
+            idempotencyKey: crypto.randomUUID(),
+          }),
+        },
+        accessToken,
+      );
 
       const data = await response.json();
 
@@ -392,7 +418,10 @@ export default function RoomPage({
 
   // Extract side pots from game state
   const sidePots = gameState?.side_pots
-    ? (gameState.side_pots as unknown as Array<{ amount: number; eligibleSeats: number[] }>)
+    ? (gameState.side_pots as unknown as Array<{
+        amount: number;
+        eligibleSeats: number[];
+      }>)
     : [];
 
   const activePlayers = players.filter((p) => !p.is_spectating);
@@ -815,7 +844,8 @@ export default function RoomPage({
                 className="mb-2 text-xs text-cigar-ash"
                 style={{ fontFamily: "Lato, sans-serif" }}
               >
-                Total buy-ins are cumulative. Live stack includes chips already committed to the current pot when a hand is running.
+                Total buy-ins are cumulative. Live stack includes chips already
+                committed to the current pot when a hand is running.
               </p>
               <table className="min-w-full">
                 <thead>
@@ -863,7 +893,7 @@ export default function RoomPage({
                     .sort((a, b) => a.seat_number - b.seat_number)
                     .map((player) => {
                       const investedThisHand = gameState
-                        ? player.total_invested_this_hand ?? 0
+                        ? (player.total_invested_this_hand ?? 0)
                         : 0;
                       const liveStack = player.chip_stack + investedThisHand;
                       const hasMoneyInPot = gameState && investedThisHand > 0;
@@ -948,7 +978,8 @@ export default function RoomPage({
                       className="whitespace-nowrap px-4 py-3 text-right text-sm font-bold text-cream-parchment"
                       style={{ fontFamily: "Roboto Mono, monospace" }}
                     >
-                      ${activePlayers.reduce(
+                      $
+                      {activePlayers.reduce(
                         (sum, p) => sum + p.total_buy_in,
                         0,
                       )}
@@ -963,11 +994,12 @@ export default function RoomPage({
                       className="whitespace-nowrap px-4 py-3 text-right text-sm font-bold text-cream-parchment"
                       style={{ fontFamily: "Roboto Mono, monospace" }}
                     >
-                      ${activePlayers.reduce(
+                      $
+                      {activePlayers.reduce(
                         (sum, p) =>
                           sum +
                           p.chip_stack +
-                          (gameState ? p.total_invested_this_hand ?? 0 : 0),
+                          (gameState ? (p.total_invested_this_hand ?? 0) : 0),
                         0,
                       )}
                     </td>
@@ -975,11 +1007,12 @@ export default function RoomPage({
                       className="whitespace-nowrap px-4 py-3 text-right text-sm font-bold text-cream-parchment"
                       style={{ fontFamily: "Roboto Mono, monospace" }}
                     >
-                      ${activePlayers.reduce(
+                      $
+                      {activePlayers.reduce(
                         (sum, p) =>
                           sum +
                           p.chip_stack +
-                          (gameState ? p.total_invested_this_hand ?? 0 : 0) -
+                          (gameState ? (p.total_invested_this_hand ?? 0) : 0) -
                           p.total_buy_in,
                         0,
                       )}

@@ -1,9 +1,23 @@
 import seedrandom from "seedrandom";
 
-const RANKS = ["2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K", "A"] as const;
+const RANKS = [
+  "2",
+  "3",
+  "4",
+  "5",
+  "6",
+  "7",
+  "8",
+  "9",
+  "T",
+  "J",
+  "Q",
+  "K",
+  "A",
+] as const;
 const SUITS = ["c", "d", "h", "s"] as const;
 
-export type Card = `${typeof RANKS[number]}${typeof SUITS[number]}`;
+export type Card = `${(typeof RANKS)[number]}${(typeof SUITS)[number]}`;
 
 export function freshDeck(): Card[] {
   const deck: Card[] = [];

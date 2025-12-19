@@ -65,7 +65,8 @@ export function PokerTable({
   // Hole card count depends on game type (2 for Hold'em, 4 for PLO variants)
   const holeCardCount = gameMode === "texas_holdem" ? 2 : 4;
   const holeCardRotationStep = holeCardCount === 2 ? 6 : 8;
-  const holeCardSpread = holeCardCount === 2 ? (isMobile ? 14 : 18) : (isMobile ? 12 : 16);
+  const holeCardSpread =
+    holeCardCount === 2 ? (isMobile ? 14 : 18) : isMobile ? 12 : 16;
 
   // Get seated players (not spectators)
   const seatedPlayers = players.filter((p) => !p.is_spectating);
@@ -101,7 +102,9 @@ export function PokerTable({
         { x: 50, y: 88 }, // bottom
       ];
       const base = mobileMap[seatNumber] ?? { x: 50, y: 50 };
-      return tableRotation !== 0 ? rotatePoint(base.x, base.y, tableRotation) : base;
+      return tableRotation !== 0
+        ? rotatePoint(base.x, base.y, tableRotation)
+        : base;
     }
 
     if (!isMobile && maxPlayers === 9) {
@@ -117,7 +120,9 @@ export function PokerTable({
         { x: 50, y: 88 }, // bottom
       ];
       const base = desktopMap[seatNumber] ?? { x: 50, y: 50 };
-      return tableRotation !== 0 ? rotatePoint(base.x, base.y, tableRotation) : base;
+      return tableRotation !== 0
+        ? rotatePoint(base.x, base.y, tableRotation)
+        : base;
     }
 
     const angle = (seatNumber / maxPlayers) * 2 * Math.PI - Math.PI / 2;
@@ -128,18 +133,12 @@ export function PokerTable({
     const n = 4; // higher = squarer sides
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
-    const x =
-      50 +
-      radiusX *
-        Math.sign(cos) *
-        Math.pow(Math.abs(cos), 2 / n);
-    const y =
-      50 +
-      radiusY *
-        Math.sign(sin) *
-        Math.pow(Math.abs(sin), 2 / n);
+    const x = 50 + radiusX * Math.sign(cos) * Math.pow(Math.abs(cos), 2 / n);
+    const y = 50 + radiusY * Math.sign(sin) * Math.pow(Math.abs(sin), 2 / n);
     const base = { x, y };
-    return tableRotation !== 0 ? rotatePoint(base.x, base.y, tableRotation) : base;
+    return tableRotation !== 0
+      ? rotatePoint(base.x, base.y, tableRotation)
+      : base;
   };
 
   return (
@@ -156,7 +155,9 @@ export function PokerTable({
       <div className="absolute inset-0 flex items-center justify-center p-0 sm:p-8">
         <div
           className="relative h-full w-full transition-transform duration-500"
-          style={{ transform: `rotate(${tableRotation}deg) scale(${tableScale})` }}
+          style={{
+            transform: `rotate(${tableRotation}deg) scale(${tableScale})`,
+          }}
         >
           <svg
             className="h-full w-full"
@@ -330,52 +331,59 @@ export function PokerTable({
             )}
 
             {/* Player Hole Cards - hide other players' face-down cards on mobile to save space */}
-            {!isEmpty && phase && !player.has_folded && (!isMobile || isMyPlayer) && (
-                  <div
-                    className={`absolute left-1/2 -translate-x-1/2 ${holeCardsOffsetClass} ${
-                      isMyPlayer && myHoleCards.length > 0 ? "z-10" : "z-0"
-                    }`}
-                  >
-                    {isMyPlayer && myHoleCards.length > 0 ? (
-                      // My cards: spread out horizontally
-                      <div className="flex gap-0.5 sm:gap-1">
-                    {myHoleCards
-                      .filter((card) => card != null)
-                      .map((card, index) => (
-                        <Card key={index} card={card} size="md" />
-                      ))}
-                  </div>
-                ) : (
-                  // Other players: fanned out face-down cards
+            {!isEmpty &&
+              phase &&
+              !player.has_folded &&
+              (!isMobile || isMyPlayer) && (
+                <div
+                  className={`absolute left-1/2 -translate-x-1/2 ${holeCardsOffsetClass} ${
+                    isMyPlayer && myHoleCards.length > 0 ? "z-10" : "z-0"
+                  }`}
+                >
+                  {isMyPlayer && myHoleCards.length > 0 ? (
+                    // My cards: spread out horizontally
+                    <div className="flex gap-0.5 sm:gap-1">
+                      {myHoleCards
+                        .filter((card) => card != null)
+                        .map((card, index) => (
+                          <Card key={index} card={card} size="md" />
+                        ))}
+                    </div>
+                  ) : (
+                    // Other players: fanned out face-down cards
                     <div
                       className="relative flex items-center justify-center"
                       style={{
-                        width: isMobile ? "clamp(64px, 24vw, 96px)" : "clamp(96px, 18vw, 120px)",
+                        width: isMobile
+                          ? "clamp(64px, 24vw, 96px)"
+                          : "clamp(96px, 18vw, 120px)",
                         height: isMobile ? "52px" : "64px",
                       }}
                     >
-                    {Array.from({ length: holeCardCount }, (_, cardIndex) => {
-                      const centerOffset = (holeCardCount - 1) / 2;
-                      const rotation = (cardIndex - centerOffset) * holeCardRotationStep;
-                      const xOffset = (cardIndex - centerOffset) * holeCardSpread;
+                      {Array.from({ length: holeCardCount }, (_, cardIndex) => {
+                        const centerOffset = (holeCardCount - 1) / 2;
+                        const rotation =
+                          (cardIndex - centerOffset) * holeCardRotationStep;
+                        const xOffset =
+                          (cardIndex - centerOffset) * holeCardSpread;
 
-                      return (
-                        <div
-                          key={cardIndex}
-                          className="absolute"
-                          style={{
-                            transform: `translateX(${xOffset}px) rotate(${rotation}deg)`,
-                            zIndex: cardIndex,
-                          }}
-                        >
-                          <Card card="Ah" faceDown={true} size="md" />
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
+                        return (
+                          <div
+                            key={cardIndex}
+                            className="absolute"
+                            style={{
+                              transform: `translateX(${xOffset}px) rotate(${rotation}deg)`,
+                              zIndex: cardIndex,
+                            }}
+                          >
+                            <Card card="Ah" faceDown={true} size="md" />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
           </button>
         );
       })}
@@ -403,22 +411,26 @@ export function PokerTable({
           </div>
 
           {/* Side pots */}
-          {sidePots && sidePots.length > 1 && sidePots.slice(1).map((sidePot, idx) => (
-            <div
-              key={idx}
-              className="glass rounded-lg px-3 sm:px-4 py-1 sm:py-1.5 border border-whiskey-gold/20 shadow-lg w-fit max-w-full mx-auto"
-            >
-              <div className="text-center">
-                <div
-                  className="text-sm sm:text-base font-bold text-whiskey-gold/80"
-                  style={{ fontFamily: "Roboto Mono, monospace" }}
-                >
-                  ${sidePot.amount}
+          {sidePots &&
+            sidePots.length > 1 &&
+            sidePots.slice(1).map((sidePot, idx) => (
+              <div
+                key={idx}
+                className="glass rounded-lg px-3 sm:px-4 py-1 sm:py-1.5 border border-whiskey-gold/20 shadow-lg w-fit max-w-full mx-auto"
+              >
+                <div className="text-center">
+                  <div
+                    className="text-sm sm:text-base font-bold text-whiskey-gold/80"
+                    style={{ fontFamily: "Roboto Mono, monospace" }}
+                  >
+                    ${sidePot.amount}
+                  </div>
+                  <div className="text-xs text-cigar-ash">
+                    Side Pot {idx + 1}
+                  </div>
                 </div>
-                <div className="text-xs text-cigar-ash">Side Pot {idx + 1}</div>
               </div>
-            </div>
-          ))}
+            ))}
         </div>
 
         {/* Community Cards */}
