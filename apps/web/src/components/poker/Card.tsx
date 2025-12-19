@@ -45,7 +45,7 @@ export function Card({ card, faceDown = false, size = "md" }: CardProps) {
   if (faceDown) {
     return (
       <div
-        className={`${config.container} ${config.rounded} ${config.border} relative overflow-hidden border-slate-600 bg-slate-900 shadow-lg`}
+        className={`${config.container} ${config.rounded} ${config.border} relative z-40 overflow-hidden border-slate-600 bg-slate-900 shadow-lg`}
       >
         <Image
           src="/card-back.jpg"
@@ -93,7 +93,7 @@ export function Card({ card, faceDown = false, size = "md" }: CardProps) {
 
   return (
     <div
-      className={`${config.container} ${config.rounded} ${config.border} relative border-gray-300 bg-white shadow-lg transition-transform hover:scale-105`}
+      className={`${config.container} ${config.rounded} ${config.border} relative z-40 border-gray-300 bg-white shadow-lg transition-transform hover:scale-105`}
     >
       {/* Center - Rank and Suit */}
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">

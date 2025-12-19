@@ -66,3 +66,9 @@ button:not(:disabled) {
   min-height: 44px;
   min-width: 44px;
 }
+
+@media (max-width: 640px) {
+  body {
+    overscroll-behavior: contain;
+  }
+}

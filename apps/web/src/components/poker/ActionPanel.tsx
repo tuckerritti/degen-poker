@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { getBettingLimits } from "@/lib/poker/betting";
 
 interface ActionPanelProps {
@@ -26,6 +32,26 @@ export function ActionPanel({
   onAction,
   disabled = false,
 }: ActionPanelProps) {
+  const subscribeToMobile = useCallback((callback: () => void) => {
+    if (typeof window === "undefined") return () => {};
+    const mq = window.matchMedia("(max-width: 640px)");
+    mq.addEventListener("change", callback);
+    return () => mq.removeEventListener("change", callback);
+  }, []);
+
+  const getMobileSnapshot = useCallback(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 640px)").matches,
+    [],
+  );
+
+  const isMobile = useSyncExternalStore(
+    subscribeToMobile,
+    getMobileSnapshot,
+    () => false,
+  );
+
   // Determine if this is a pot-limit game (PLO) or no-limit game (Hold'em)
   const isPotLimit = gameMode === "double_board_bomb_pot_plo";
 
@@ -103,22 +129,143 @@ export function ActionPanel({
     setExtraAmount(clampedExtra);
   };
 
+  const mobileActions: Array<{
+    key: string;
+    label: string;
+    onClick: () => void;
+    disabled?: boolean;
+    accent?: "primary" | "danger" | "neutral";
+  }> = [];
+
+  if (limits.canFold) {
+    mobileActions.push({
+      key: "fold",
+      label: "Fold",
+      onClick: () => handleAction("fold"),
+      disabled: disabled || isSubmitting,
+      accent: "danger",
+    });
+  }
+
+  if (limits.canCheck) {
+    mobileActions.push({
+      key: "check",
+      label: "Check",
+      onClick: () => handleAction("check"),
+      disabled: disabled || isSubmitting,
+      accent: "neutral",
+    });
+  } else if (limits.canCall) {
+    mobileActions.push({
+      key: "call",
+      label: `Call $${limits.callAmount}`,
+      onClick: () => handleAction("call"),
+      disabled: disabled || isSubmitting,
+      accent: "neutral",
+    });
+  }
+
+  if (limits.canRaise) {
+    mobileActions.push({
+      key: "raise",
+      label: currentBet === 0 ? `Bet $${targetTotalBet}` : `Raise $${targetTotalBet}`,
+      onClick: () =>
+        handleAction(currentBet === 0 ? "bet" : "raise", targetTotalBet),
+      disabled:
+        disabled ||
+        isSubmitting ||
+        targetTotalBet < limits.minBet ||
+        targetTotalBet > limits.maxBet,
+      accent: "primary",
+    });
+  } else if (!limits.canRaise && playerChips > 0) {
+    mobileActions.push({
+      key: "allin",
+      label: `All-In $${playerChips}`,
+      onClick: () => handleAction("all_in"),
+      disabled: disabled || isSubmitting,
+      accent: "primary",
+    });
+  }
+
+  const mobileButtonClasses = (accent?: "primary" | "danger" | "neutral") => {
+    const base =
+      "w-full rounded-lg border px-3 py-3 text-sm font-semibold transition-all touch-target";
+    const palette =
+      accent === "primary"
+        ? "bg-whiskey-gold text-tokyo-night border-whiskey-gold hover:bg-whiskey-gold/90"
+        : accent === "danger"
+          ? "bg-velvet-red/90 text-cream-parchment border-velvet-red hover:bg-velvet-red"
+          : "bg-black/30 text-cream-parchment border-white/15 hover:border-whiskey-gold/40";
+    return `${base} ${palette}`;
+  };
+
+  if (isMobile) {
+    return (
+      <div
+        className="glass border-t border-whiskey-gold/20 p-3 shadow-[0_-8px_30px_rgba(0,0,0,0.45)] rounded-t-xl max-w-[520px] mx-auto w-full"
+        style={{
+          fontFamily: "Lato, sans-serif",
+          paddingBottom: "max(env(safe-area-inset-bottom), 0px)",
+        }}
+      >
+        <div className="flex flex-col gap-3">
+          {limits.canRaise && (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs text-cream-parchment/80">
+                <span className="font-semibold">Adding ${extraAmount}</span>
+                <span>Total after: ${targetTotalBet}</span>
+              </div>
+              <input
+                type="range"
+                min={extraMin}
+                max={extraMax}
+                value={extraAmount}
+                onChange={(e) => setExtraAmount(Number(e.target.value))}
+                className="w-full accent-whiskey-gold h-8"
+                disabled={disabled || isSubmitting}
+              />
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-2">
+            {mobileActions.map((action) => (
+              <button
+                key={action.key}
+                onClick={action.onClick}
+                disabled={action.disabled}
+                className={`${mobileButtonClasses(action.accent)} ${
+                  action.disabled ? "opacity-60" : ""
+                }`}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
-      className="glass border-t border-whiskey-gold/20 p-3 sm:p-4"
-      style={{ fontFamily: "Lato, sans-serif" }}
+      className="glass border-t border-whiskey-gold/20 p-3 sm:p-4 shadow-[0_-8px_30px_rgba(0,0,0,0.45)] rounded-t-xl sm:rounded-none max-w-[640px] mx-auto w-full"
+      style={{
+        fontFamily: "Lato, sans-serif",
+        paddingBottom: "max(env(safe-area-inset-bottom), 0px)",
+      }}
     >
       <div className="mx-auto max-w-full sm:max-w-4xl">
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
           {/* Row 1: Fold + Check/Call */}
-          <div className="flex gap-2">
+          <div className="grid grid-cols-1 sm:flex sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
             {/* Fold */}
             {limits.canFold && (
               <button
                 onClick={() => handleAction("fold")}
                 disabled={disabled || isSubmitting}
-                className="flex-1 sm:flex-none rounded-lg bg-velvet-red border border-velvet-red px-8 sm:px-12 py-3 font-bold text-cream-parchment shadow-lg transition-all hover:bg-velvet-red/90 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 touch-target"
+                className="w-full sm:w-auto rounded-lg bg-velvet-red border border-velvet-red px-6 sm:px-12 py-3 font-bold text-cream-parchment shadow-lg transition-all hover:bg-velvet-red/90 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 touch-target"
               >
                 Fold
               </button>
@@ -129,7 +276,7 @@ export function ActionPanel({
               <button
                 onClick={() => handleAction("check")}
                 disabled={disabled || isSubmitting}
-                className="flex-1 sm:flex-none rounded-lg bg-black/40 border border-white/20 px-8 sm:px-12 py-3 font-bold text-cream-parchment shadow-lg transition-all hover:border-whiskey-gold/50 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 touch-target"
+                className="w-full sm:w-auto rounded-lg bg-black/40 border border-white/20 px-6 sm:px-12 py-3 font-bold text-cream-parchment shadow-lg transition-all hover:border-whiskey-gold/50 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 touch-target"
               >
                 Check
               </button>
@@ -140,7 +287,7 @@ export function ActionPanel({
               <button
                 onClick={() => handleAction("call")}
                 disabled={disabled || isSubmitting}
-                className="flex-1 sm:flex-none rounded-lg bg-whiskey-gold border border-whiskey-gold px-8 sm:px-12 py-3 font-bold text-tokyo-night shadow-lg transition-all hover:bg-whiskey-gold/90 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 touch-target"
+                className="w-full sm:w-auto rounded-lg bg-whiskey-gold border border-whiskey-gold px-6 sm:px-12 py-3 font-bold text-tokyo-night shadow-lg transition-all hover:bg-whiskey-gold/90 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 touch-target"
                 style={{ fontFamily: "Roboto Mono, monospace" }}
               >
                 Call ${limits.callAmount}
@@ -162,38 +309,38 @@ export function ActionPanel({
                   className="w-full accent-whiskey-gold h-8"
                   disabled={disabled || isSubmitting}
                 />
-                <div className="text-xs text-cream-parchment/80 flex justify-between">
-                  <span>Adding ${extraAmount}</span>
+                <div className="text-xs sm:text-sm text-cream-parchment/80 flex flex-wrap justify-between gap-1">
+                  <span className="font-semibold">Adding ${extraAmount}</span>
                   <span>Total after raise: ${targetTotalBet}</span>
                 </div>
 
                 {/* Quick bet buttons */}
-                <div className="flex gap-2">
+                <div className="hidden sm:grid sm:grid-cols-4 gap-2">
                   <button
                     onClick={() => handleQuickBet(0.5)}
                     disabled={disabled || isSubmitting}
-                    className="flex-1 rounded bg-mahogany border border-white/10 px-2 py-2 text-xs sm:text-xs text-cream-parchment hover:border-whiskey-gold/50 disabled:opacity-50 transition-colors"
+                    className="rounded bg-mahogany border border-white/10 px-2 py-2 text-xs sm:text-xs text-cream-parchment hover:border-whiskey-gold/50 disabled:opacity-50 transition-colors"
                   >
                     1/2 Pot
                   </button>
                   <button
                     onClick={() => handleQuickBet(0.75)}
                     disabled={disabled || isSubmitting}
-                    className="flex-1 rounded bg-mahogany border border-white/10 px-2 py-2 text-xs sm:text-xs text-cream-parchment hover:border-whiskey-gold/50 disabled:opacity-50 transition-colors"
+                    className="rounded bg-mahogany border border-white/10 px-2 py-2 text-xs sm:text-xs text-cream-parchment hover:border-whiskey-gold/50 disabled:opacity-50 transition-colors"
                   >
                     3/4 Pot
                   </button>
                   <button
                     onClick={() => handleQuickBet(1)}
                     disabled={disabled || isSubmitting}
-                    className="flex-1 rounded bg-mahogany border border-white/10 px-2 py-2 text-xs sm:text-xs text-cream-parchment hover:border-whiskey-gold/50 disabled:opacity-50 transition-colors"
+                    className="rounded bg-mahogany border border-white/10 px-2 py-2 text-xs sm:text-xs text-cream-parchment hover:border-whiskey-gold/50 disabled:opacity-50 transition-colors"
                   >
                     Pot
                   </button>
                   <button
                     onClick={() => setExtraAmount(extraMax)}
                     disabled={disabled || isSubmitting || playerChips > limits.maxBet}
-                    className="flex-1 rounded bg-mahogany border border-white/10 px-2 py-2 text-xs sm:text-xs text-cream-parchment hover:border-whiskey-gold/50 disabled:opacity-50 transition-colors"
+                    className="rounded bg-mahogany border border-white/10 px-2 py-2 text-xs sm:text-xs text-cream-parchment hover:border-whiskey-gold/50 disabled:opacity-50 transition-colors"
                   >
                     All-In
                   </button>
@@ -214,7 +361,7 @@ export function ActionPanel({
                   targetTotalBet < limits.minBet ||
                   targetTotalBet > limits.maxBet
                 }
-                className="rounded-lg bg-whiskey-gold border border-whiskey-gold px-8 sm:px-12 py-3 font-bold text-tokyo-night shadow-lg transition-all hover:bg-whiskey-gold/90 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 touch-target"
+                className="w-full sm:w-auto rounded-lg bg-whiskey-gold border border-whiskey-gold px-6 sm:px-12 py-3 font-bold text-tokyo-night shadow-lg transition-all hover:bg-whiskey-gold/90 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 touch-target"
               >
                 <div className="text-xs">
                   {currentBet === 0 ? "Bet" : "Raise"}
