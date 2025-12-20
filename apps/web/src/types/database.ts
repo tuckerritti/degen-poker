@@ -17,10 +17,11 @@ export type HandResult = Tables<"hand_results">;
 
 // Custom types for JSON fields and application logic
 
-// Board state structure for double board PLO
+// Board state structure for double board PLO and Indian Poker
 export interface BoardState {
   board1?: string[]; // e.g., ["Ah", "Kh", "7d", "4c", "2s"]
   board2?: string[]; // e.g., ["2s", "9c", "Qd", "Jh", "3d"]
+  visible_player_cards?: Record<string, string[]>; // For Indian Poker: seat number -> cards
 }
 
 export interface SidePot {

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/hooks/useSession";
 
-type GameMode = "double_board_bomb_pot_plo" | "texas_holdem";
+type GameMode = "double_board_bomb_pot_plo" | "texas_holdem" | "indian_poker";
 
 interface GameModeConfig {
   id: GameMode;
@@ -26,6 +26,12 @@ const GAME_MODES: GameModeConfig[] = [
     enabled: true,
     description: "2 hole cards, 1 board, standard blinds",
   },
+  {
+    id: "indian_poker",
+    name: "Indian Poker",
+    enabled: true,
+    description: "1 card on forehead, bomb pot antes, high card wins",
+  },
 ];
 
 export default function Home() {
@@ -42,7 +48,7 @@ export default function Home() {
   const [minBuyIn, setMinBuyIn] = useState(200);
   const [maxBuyIn, setMaxBuyIn] = useState(1000);
 
-  // Keep buy-in bounds aligned with the active stake type (blinds for Hold'em, ante for PLO)
+  // Keep buy-in bounds aligned with the active stake type (blinds for Hold'em, ante for PLO/Indian Poker)
   useEffect(() => {
     const stake = selectedMode === "texas_holdem" ? bigBlind : ploAnte;
     const floor = Math.max(1, stake * 20);
@@ -50,6 +56,15 @@ export default function Home() {
     setMinBuyIn((prev) => (prev < floor ? floor : prev));
     setMaxBuyIn((prev) => (prev < floor ? floor : prev));
   }, [selectedMode, bigBlind, ploAnte]);
+
+  // Helper function to get stake structure based on game mode
+  const getStakeStructure = (mode: GameMode) => {
+    if (mode === "texas_holdem") {
+      return { smallBlind, bigBlind };
+    }
+    // PLO/Indian Poker bomb pots: big blind value is the ante; SB set to 0
+    return { smallBlind: 0, bigBlind: ploAnte };
+  };
 
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,6 +80,7 @@ export default function Home() {
     setIsCreating(true);
 
     try {
+      const stakes = getStakeStructure(selectedMode);
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_ENGINE_URL.replace(/\/+$/, "")}/rooms`,
         {
@@ -74,11 +90,8 @@ export default function Home() {
             ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
           },
           body: JSON.stringify({
-            // PLO bomb pots: big blind value is the ante; SB set to 0
-            smallBlind:
-              selectedMode === "double_board_bomb_pot_plo" ? 0 : smallBlind,
-            bigBlind:
-              selectedMode === "double_board_bomb_pot_plo" ? ploAnte : bigBlind,
+            smallBlind: stakes.smallBlind,
+            bigBlind: stakes.bigBlind,
             minBuyIn,
             maxBuyIn,
             gameMode: selectedMode,
@@ -122,7 +135,7 @@ export default function Home() {
             Select Game Mode
           </h2>
 
-          <div className="mb-6 sm:mb-8 grid gap-3 sm:gap-4 md:grid-cols-2">
+          <div className="mb-6 sm:mb-8 grid gap-3 sm:gap-4 md:grid-cols-3">
             {GAME_MODES.map((mode) => (
               <button
                 key={mode.id}
@@ -216,8 +229,9 @@ export default function Home() {
                   className="mt-1 text-xs text-cigar-ash"
                   style={{ fontFamily: "Lato, sans-serif" }}
                 >
-                  Ante-only bomb pot (big blind value is the ante; small blind
-                  is 0).
+                  {selectedMode === "indian_poker"
+                    ? "Ante-only bomb pot (big blind value is ante; small blind is 0)"
+                    : "Ante-only bomb pot (big blind value is the ante; small blind is 0)"}
                 </p>
               </div>
             )}

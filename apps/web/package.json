@@ -11,6 +11,7 @@
     "test": "echo \"no web tests\""
   },
   "dependencies": {
+    "@poker/shared": "0.0.0",
     "@poker-apprentice/hand-evaluator": "^3.0.0",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.87.3",

@@ -10,6 +10,7 @@ import {
   endOfHandPayout,
   determineDoubleBoardWinners,
   determineSingleBoardWinners,
+  determineIndianPokerWinners,
   calculateSidePots,
 } from "./logic.js";
 import type { GameStateRow, Room, RoomPlayer, SidePot } from "./types.js";
@@ -81,7 +82,9 @@ const createRoomSchema = z.object({
   maxPlayers: z.number().int().min(2).max(10).optional(),
   interHandDelay: z.number().int().min(0).optional(),
   pauseAfterHand: z.boolean().optional(),
-  gameMode: z.enum(["double_board_bomb_pot_plo", "texas_holdem"]).optional(),
+  gameMode: z
+    .enum(["double_board_bomb_pot_plo", "texas_holdem", "indian_poker"])
+    .optional(),
 });
 
 const joinRoomSchema = z.object({
@@ -504,6 +507,22 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
       }
     }
 
+    // Fetch player hands for Indian Poker showdown reveal
+    let playerHands: Array<{ seat_number: number; cards: string[] }> | undefined;
+    if (room.game_mode === "indian_poker") {
+      const { data: handsData, error: handsErr } = await supabase
+        .from("player_hands")
+        .select("seat_number, cards")
+        .eq("game_state_id", gameState.id);
+      if (handsErr) throw handsErr;
+      if (handsData) {
+        playerHands = handsData.map((h) => ({
+          seat_number: h.seat_number,
+          cards: h.cards as unknown as string[],
+        }));
+      }
+    }
+
     const outcome = applyAction(
       {
         room: room as Room,
@@ -511,6 +530,7 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
         gameState: gameState as GameStateRow,
         fullBoard1: secret.full_board1,
         fullBoard2: secret.full_board2,
+        playerHands,
       },
       payload.seatNumber,
       payload.actionType as ActionType,
@@ -589,6 +609,7 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
         const board1 = secret.full_board1 || [];
         const board2 = secret.full_board2 || [];
         const isHoldem = (room as Room).game_mode === "texas_holdem";
+        const isIndianPoker = (room as Room).game_mode === "indian_poker";
 
         const activeHands = (playerHands || [])
           .filter((ph) =>
@@ -604,7 +625,11 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
           (outcome.updatedGameState.side_pots as SidePot[]) ??
           calculateSidePots(mergedPlayers);
 
-        if (isHoldem) {
+        if (isIndianPoker) {
+          // Indian Poker: single card high-card comparison
+          const winners = determineIndianPokerWinners(activeHands);
+          payouts = endOfHandPayout(sidePots, winners, []);
+        } else if (isHoldem) {
           // Texas Hold'em: single board winner determination
           const winners = determineSingleBoardWinners(activeHands, board1);
           // For Hold'em, distribute entire pot to winners (not split between boards)

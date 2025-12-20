@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useSyncExternalStore, useState } from "react";
 import type { GameMode, RoomPlayer } from "@/types/database";
 import { Card } from "./Card";
 import { CommunityCards } from "./CommunityCards";
@@ -16,6 +16,7 @@ interface PokerTableProps {
   sidePots?: Array<{ amount: number; eligibleSeats: number[] }>;
   phase?: string;
   gameMode?: GameMode;
+  visiblePlayerCards?: Record<string, string[]>;
   showdownProgress?: number | null;
   onSeatClick: (seatNumber: number) => void;
 }
@@ -32,6 +33,8 @@ export function PokerTable({
   potSize = 0,
   sidePots = [],
   phase,
+  gameMode,
+  visiblePlayerCards = {},
   onSeatClick,
   showdownProgress = null,
 }: PokerTableProps) {
@@ -63,10 +66,63 @@ export function PokerTable({
     ? "clamp(68px, 21vw, 104px)"
     : "clamp(96px, 14vw, 136px)";
 
-  // Hole card count depends on game type (4 for PLO variants)
-  const holeCardCount = 4;
-  const holeCardRotationStep = 8;
-  const holeCardSpread = isMobile ? 12 : 16;
+  // Hole card count depends on game type (1 for Indian Poker, 2 for Hold'em, 4 for PLO variants)
+  const isIndianPoker = gameMode === "indian_poker";
+  const holeCardCount = isIndianPoker
+    ? 1
+    : gameMode === "texas_holdem"
+      ? 2
+      : 4;
+  const holeCardRotationStep =
+    holeCardCount === 2 ? 6 : holeCardCount === 1 ? 0 : 8;
+  const holeCardSpread =
+    holeCardCount === 2
+      ? isMobile
+        ? 14
+        : 18
+      : holeCardCount === 1
+        ? 0
+        : isMobile
+          ? 12
+          : 16;
+
+  // State for fold card reveal (Indian Poker)
+  const [revealedFoldedCard, setRevealedFoldedCard] = useState<{
+    seat: number;
+    card: string;
+  } | null>(null);
+
+  // Memoize player's fold status to avoid effect re-runs on players array changes
+  const myPlayer = players.find((p) => p.id === myPlayerId);
+  const myHasFolded = myPlayer?.has_folded ?? false;
+  const mySeatNumber = myPlayer?.seat_number;
+
+  // Handle fold card reveal for Indian Poker
+  useEffect(() => {
+    if (!isIndianPoker || !myPlayerId) return;
+
+    // Exit early if player hasn't folded or has no cards
+    if (!myHasFolded || !myHoleCards || myHoleCards.length === 0 || !mySeatNumber) {
+      return;
+    }
+
+    const myCard = myHoleCards[0];
+
+    // Reveal card immediately (using setTimeout to avoid cascading render warning)
+    const revealTimer = setTimeout(() => {
+      setRevealedFoldedCard({ seat: mySeatNumber, card: myCard });
+    }, 0);
+
+    // Hide card after 3 seconds
+    const hideTimer = setTimeout(() => {
+      setRevealedFoldedCard(null);
+    }, 3000);
+
+    return () => {
+      clearTimeout(revealTimer);
+      clearTimeout(hideTimer);
+    };
+  }, [isIndianPoker, myPlayerId, myHasFolded, mySeatNumber, myHoleCards]);
 
   // Get seated players (not spectators)
   const seatedPlayers = players.filter((p) => !p.is_spectating);
@@ -240,14 +296,20 @@ export function PokerTable({
         const isCurrentActor = currentActorSeat === seatNumber;
         const isEmpty = !player;
         const hasButton = buttonSeat === seatNumber;
+        const shouldRaiseMyCards =
+          !isIndianPoker && isMyPlayer && myHoleCards.length > 0;
         const holeCardsOffsetClass =
-          isMyPlayer && myHoleCards.length > 0
+          shouldRaiseMyCards
             ? isMobile
               ? "-top-16"
               : "-top-28"
             : isMobile
               ? "-top-12"
               : "-top-20";
+        const holeCardsZClass =
+          isIndianPoker || !isMyPlayer || myHoleCards.length === 0
+            ? "z-0"
+            : "z-10";
 
         return (
           <button
@@ -347,12 +409,32 @@ export function PokerTable({
               !player.has_folded &&
               (!isMobile || isMyPlayer) && (
                 <div
-                  className={`absolute left-1/2 -translate-x-1/2 ${holeCardsOffsetClass} ${
-                    isMyPlayer && myHoleCards.length > 0 ? "z-10" : "z-0"
-                  }`}
+                  className={`absolute left-1/2 -translate-x-1/2 ${holeCardsOffsetClass} ${holeCardsZClass}`}
                 >
-                  {isMyPlayer && myHoleCards.length > 0 ? (
-                    // My cards: spread out horizontally
+                  {isIndianPoker ? (
+                    // Indian Poker: Single card
+                    // SECURITY: Use visiblePlayerCards for all players
+                    // Show own card face-down during active play, face-up at showdown
+                    (() => {
+                      const displayCard =
+                        visiblePlayerCards?.[
+                          player.seat_number.toString()
+                        ]?.[0] ?? null;
+
+                      // During active play, show own card face-down
+                      // At showdown/complete, show own card face-up
+                      const isShowdownPhase =
+                        phase === "showdown" || phase === "complete";
+                      const showFaceDown = isMyPlayer && !isShowdownPhase;
+
+                      // Always show a card (face-down during play, face-up at showdown for own card)
+                      // Other players' cards always face-up
+                      return displayCard ? (
+                        <Card card={displayCard} faceDown={showFaceDown} size="md" />
+                      ) : null;
+                    })()
+                  ) : isMyPlayer && myHoleCards.length > 0 ? (
+                    // My cards: spread out horizontally (Hold'em/PLO)
                     <div className="flex gap-0.5 sm:gap-1">
                       {myHoleCards
                         .filter((card) => card != null)
@@ -361,7 +443,7 @@ export function PokerTable({
                         ))}
                     </div>
                   ) : (
-                    // Other players: fanned out face-down cards
+                    // Other players: fanned out face-down cards (Hold'em/PLO)
                     <div
                       className="relative flex items-center justify-center"
                       style={{
@@ -393,6 +475,21 @@ export function PokerTable({
                       })}
                     </div>
                   )}
+                </div>
+              )}
+
+            {/* Indian Poker: Show folded card temporarily */}
+            {!isEmpty &&
+              player.has_folded &&
+              isIndianPoker &&
+              isMyPlayer &&
+              revealedFoldedCard?.seat === player.seat_number && (
+                <div className="absolute -top-16 left-1/2 -translate-x-1/2 z-50">
+                  <Card
+                    card={revealedFoldedCard.card}
+                    faceDown={false}
+                    size="md"
+                  />
                 </div>
               )}
           </button>

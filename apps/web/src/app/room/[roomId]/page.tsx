@@ -479,18 +479,21 @@ export default function RoomPage({
   const myHoleCards: string[] =
     (playerHand?.cards as unknown as string[]) || [];
 
-  // Get community cards from board_state JSONB (per POKER_PLAN.md)
+  // Get community cards and visible player cards from board_state JSONB
   let boardA: string[] = [];
   let boardB: string[] = [];
+  let visiblePlayerCards: Record<string, string[]> = {};
   if (gameState?.board_state) {
     const boardState = gameState.board_state as unknown as BoardState;
     boardA = boardState.board1 || [];
     boardB = boardState.board2 || [];
+    visiblePlayerCards = boardState.visible_player_cards || {};
     console.log("Board state received:", {
       boardA,
       boardB,
       boardALength: boardA.length,
       boardBLength: boardB.length,
+      visiblePlayerCards,
     });
   }
 
@@ -659,6 +662,7 @@ export default function RoomPage({
             sidePots={sidePots}
             phase={gameState?.phase}
             gameMode={room.game_mode}
+            visiblePlayerCards={visiblePlayerCards}
             showdownProgress={isShowdownPhase ? showdownProgress : null}
             onSeatClick={handleSeatClick}
           />

@@ -29,6 +29,7 @@ export type GamePhase = (typeof GAME_PHASES)[number];
 export const GAME_MODES = [
   "double_board_bomb_pot_plo",
   "texas_holdem",
+  "indian_poker",
 ] as const;
 export type GameMode = (typeof GAME_MODES)[number];
 
