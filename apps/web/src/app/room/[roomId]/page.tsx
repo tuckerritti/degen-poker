@@ -131,6 +131,7 @@ export default function RoomPage({
 
   // Shrinking progress bar while showdown resolves
   // Dependencies include hand_completed_at to restart the timer when it changes
+  // Phase dependency ensures progress resets when transitioning to/from showdown
   useEffect(() => {
     const isShowdownPhase =
       gameState?.phase === "showdown" || gameState?.phase === "complete";
@@ -145,23 +146,23 @@ export default function RoomPage({
       ? new Date(gameState.hand_completed_at as string).getTime()
       : Date.now();
     const endsAt = startedAt + durationMs;
-    let interval: ReturnType<typeof setInterval> | null = null;
+    let rafId: number | null = null;
 
     const tick = () => {
       const remaining = endsAt - Date.now();
       const ratio = Math.max(0, Math.min(1, remaining / durationMs));
       setShowdownProgress(ratio);
-      if (remaining <= 0) {
-        if (interval) clearInterval(interval);
+
+      if (remaining > 0) {
+        rafId = requestAnimationFrame(tick);
       }
     };
 
-    tick();
-    // 80ms intervals for smooth visual progress bar animation
-    interval = setInterval(tick, 80);
+    // Use requestAnimationFrame for smooth 60fps animation (better performance and battery life)
+    rafId = requestAnimationFrame(tick);
 
     return () => {
-      if (interval) clearInterval(interval);
+      if (rafId !== null) cancelAnimationFrame(rafId);
     };
   }, [gameState?.phase, gameState?.hand_completed_at]);
 
@@ -185,6 +186,8 @@ export default function RoomPage({
       seatedPlayerCount >= 2 &&
       isOwner
     ) {
+      // Note: Changed from || to ?? to respect explicit 0 value (no delay)
+      // Previously 0 would fallback to 3000ms default
       const delayMs = room.inter_hand_delay ?? 0;
 
       // Show countdown

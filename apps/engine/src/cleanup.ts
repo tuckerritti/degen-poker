@@ -107,8 +107,9 @@ export class HandCompletionCleanup {
 
     if (!completedHands || completedHands.length === 0) {
       // Health check: log if we haven't processed anything in a while but also haven't errored
+      // Log every 5 minutes to avoid log noise while still providing health visibility
       const timeSinceLastCheck = Date.now() - this.lastHealthCheckAt;
-      if (timeSinceLastCheck > 60000 && this.consecutiveErrors === 0) {
+      if (timeSinceLastCheck > 300000 && this.consecutiveErrors === 0) {
         logger.debug("Cleanup scheduler healthy, no hands to clean");
         this.lastHealthCheckAt = Date.now();
       }

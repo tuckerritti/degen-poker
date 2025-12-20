@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@poker-apprentice/hand-evaluator": "^3.0.0",
+    "@poker/shared": "0.0.0",
     "@supabase/supabase-js": "^2.87.3",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
