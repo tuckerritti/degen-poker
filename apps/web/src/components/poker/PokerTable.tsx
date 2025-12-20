@@ -92,27 +92,28 @@ export function PokerTable({
     card: string;
   } | null>(null);
 
+  // Memoize player's fold status to avoid effect re-runs on players array changes
+  const myPlayer = players.find((p) => p.id === myPlayerId);
+  const myHasFolded = myPlayer?.has_folded ?? false;
+  const mySeatNumber = myPlayer?.seat_number;
+
   // Handle fold card reveal for Indian Poker
   useEffect(() => {
     if (!isIndianPoker || !myPlayerId) return;
 
-    const myPlayer = players.find((p) => p.id === myPlayerId);
-    if (
-      !myPlayer ||
-      !myPlayer.has_folded ||
-      !myHoleCards ||
-      myHoleCards.length === 0
-    ) {
+    // Exit early if player hasn't folded or has no cards
+    if (!myHasFolded || !myHoleCards || myHoleCards.length === 0 || !mySeatNumber) {
       return;
     }
 
     const myCard = myHoleCards[0];
 
-    // Reveal card immediately, then hide after 3 seconds
+    // Reveal card immediately (using setTimeout to avoid cascading render warning)
     const revealTimer = setTimeout(() => {
-      setRevealedFoldedCard({ seat: myPlayer.seat_number, card: myCard });
+      setRevealedFoldedCard({ seat: mySeatNumber, card: myCard });
     }, 0);
 
+    // Hide card after 3 seconds
     const hideTimer = setTimeout(() => {
       setRevealedFoldedCard(null);
     }, 3000);
@@ -121,7 +122,7 @@ export function PokerTable({
       clearTimeout(revealTimer);
       clearTimeout(hideTimer);
     };
-  }, [isIndianPoker, myPlayerId, players, myHoleCards]);
+  }, [isIndianPoker, myPlayerId, myHasFolded, mySeatNumber, myHoleCards]);
 
   // Get seated players (not spectators)
   const seatedPlayers = players.filter((p) => !p.is_spectating);
@@ -295,14 +296,20 @@ export function PokerTable({
         const isCurrentActor = currentActorSeat === seatNumber;
         const isEmpty = !player;
         const hasButton = buttonSeat === seatNumber;
+        const shouldRaiseMyCards =
+          !isIndianPoker && isMyPlayer && myHoleCards.length > 0;
         const holeCardsOffsetClass =
-          isMyPlayer && myHoleCards.length > 0
+          shouldRaiseMyCards
             ? isMobile
               ? "-top-16"
               : "-top-28"
             : isMobile
               ? "-top-12"
               : "-top-20";
+        const holeCardsZClass =
+          isIndianPoker || !isMyPlayer || myHoleCards.length === 0
+            ? "z-0"
+            : "z-10";
 
         return (
           <button
@@ -402,26 +409,28 @@ export function PokerTable({
               !player.has_folded &&
               (!isMobile || isMyPlayer) && (
                 <div
-                  className={`absolute left-1/2 -translate-x-1/2 ${holeCardsOffsetClass} ${
-                    isMyPlayer && myHoleCards.length > 0 ? "z-10" : "z-0"
-                  }`}
+                  className={`absolute left-1/2 -translate-x-1/2 ${holeCardsOffsetClass} ${holeCardsZClass}`}
                 >
                   {isIndianPoker ? (
                     // Indian Poker: Single card
+                    // SECURITY: Use visiblePlayerCards for all players
+                    // Show own card face-down during active play, face-up at showdown
                     (() => {
-                      const displayCard = isMyPlayer
-                        ? (myHoleCards?.[0] ?? null)
-                        : (visiblePlayerCards?.[
-                            player.seat_number.toString()
-                          ]?.[0] ?? null);
-                      const showFaceDown = isMyPlayer; // My card is face-down, others face-up
+                      const displayCard =
+                        visiblePlayerCards?.[
+                          player.seat_number.toString()
+                        ]?.[0] ?? null;
 
+                      // During active play, show own card face-down
+                      // At showdown/complete, show own card face-up
+                      const isShowdownPhase =
+                        phase === "showdown" || phase === "complete";
+                      const showFaceDown = isMyPlayer && !isShowdownPhase;
+
+                      // Always show a card (face-down during play, face-up at showdown for own card)
+                      // Other players' cards always face-up
                       return displayCard ? (
-                        <Card
-                          card={displayCard}
-                          faceDown={showFaceDown}
-                          size="md"
-                        />
+                        <Card card={displayCard} faceDown={showFaceDown} size="md" />
                       ) : null;
                     })()
                   ) : isMyPlayer && myHoleCards.length > 0 ? (

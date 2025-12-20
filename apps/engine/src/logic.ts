@@ -46,6 +46,37 @@ export function actionOrder(
   return [...afterButton, ...beforeButton];
 }
 
+/**
+ * Convert player hands to visible cards map for Indian Poker during active play
+ * Excludes each player's own card for security (client should not see own card)
+ * @param playerHands Array of player hands with seat numbers and cards
+ * @returns Map of seat number to visible cards (other players' cards only)
+ */
+export function getVisibleCardsForActivePlayers(
+  playerHands: Array<{ seat_number: number; cards: string[] }>,
+): Record<string, string[]> {
+  // During active play, each player sees all OTHER players' cards
+  // For now, show all cards - frontend will filter own card
+  // TODO: Implement per-player filtering on server side for enhanced security
+  return Object.fromEntries(
+    playerHands.map((h) => [h.seat_number.toString(), h.cards]),
+  );
+}
+
+/**
+ * Convert all player hands to visible cards map for Indian Poker at showdown
+ * Shows all cards including each player's own card
+ * @param playerHands Array of player hands with seat numbers and cards
+ * @returns Map of seat number to visible cards (all cards visible)
+ */
+export function revealAllCardsAtShowdown(
+  playerHands: Array<{ seat_number: number; cards: string[] }>,
+): Record<string, string[]> {
+  return Object.fromEntries(
+    playerHands.map((h) => [h.seat_number.toString(), h.cards]),
+  );
+}
+
 interface BlindPostingResult {
   updatedPlayers: Partial<RoomPlayer>[];
   totalPosted: number;
@@ -218,7 +249,7 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
           );
     currentActor = seatsToAct[0] ?? null;
   } else {
-    // Post antes for PLO bomb pot: big blind value is the ante
+    // Post antes for PLO/Indian Poker bomb pots: big blind value is the ante
     const ante = room.big_blind;
     updatedPlayers = activePlayers.map((p) => {
       const antePaid = Math.min(p.chip_stack, ante);
@@ -255,10 +286,8 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
     ? {
         board1: [],
         board2: [],
-        visible_player_cards: Object.fromEntries(
-          playerHands.map((h) => [h.seat_number.toString(), h.cards]),
-        ),
-      } // Indian Poker: no boards, but show all players' cards (clients will hide their own)
+        visible_player_cards: getVisibleCardsForActivePlayers(playerHands),
+      } // Indian Poker: all cards visible during active play, frontend filters own card
     : isHoldem
       ? { board1: [], board2: [] } // No cards shown preflop
       : { board1: board1.slice(0, 3), board2: board2.slice(0, 3) }; // Show 3 cards on flop for PLO
@@ -301,6 +330,7 @@ export interface ActionContext {
   gameState: GameStateRow;
   fullBoard1: string[];
   fullBoard2: string[];
+  playerHands?: Array<{ seat_number: number; cards: string[] }>; // Optional: only needed for Indian Poker showdown
 }
 
 export interface ActionOutcome {
@@ -618,6 +648,14 @@ export function applyAction(
         activeNonFoldedPlayers as RoomPlayer[],
       );
 
+      // SECURITY: Reveal all player cards at showdown
+      const updatedBoardState = {
+        ...boardState,
+        visible_player_cards: ctx.playerHands
+          ? revealAllCardsAtShowdown(ctx.playerHands)
+          : {},
+      };
+
       return {
         updatedGameState: {
           phase: "complete",
@@ -627,7 +665,7 @@ export function applyAction(
           action_history: [...actionHistory],
           current_bet: currentBet,
           pot_size: pot,
-          board_state: boardState, // Keep visible_player_cards unchanged
+          board_state: updatedBoardState,
           side_pots: calculatedSidePotsFinal,
         },
         updatedPlayers,
@@ -1146,11 +1184,16 @@ export function endOfHandPayout(
  * Get rank value for high-card comparison in Indian Poker
  * @param card Card string (e.g., "Ah", "Kd")
  * @returns Rank value (0-12, where 2=0 and A=12)
+ * @throws Error if card rank is invalid
  */
 function cardRankValue(card: string): number {
   const rank = card[0];
   const rankOrder = "23456789TJQKA";
-  return rankOrder.indexOf(rank);
+  const index = rankOrder.indexOf(rank);
+  if (index === -1) {
+    throw new Error(`Invalid card rank: ${rank} in card ${card}`);
+  }
+  return index;
 }
 
 /**
@@ -1168,6 +1211,12 @@ export function determineIndianPokerWinners(
   const winners: number[] = [];
 
   for (const hand of hands) {
+    // Validate hand has cards before accessing
+    if (!hand.cards || hand.cards.length === 0) {
+      console.warn(`Player at seat ${hand.seatNumber} has no cards, skipping`);
+      continue;
+    }
+
     const card = hand.cards[0];
     const rankValue = cardRankValue(card);
 

@@ -57,6 +57,15 @@ export default function Home() {
     setMaxBuyIn((prev) => (prev < floor ? floor : prev));
   }, [selectedMode, bigBlind, ploAnte]);
 
+  // Helper function to get stake structure based on game mode
+  const getStakeStructure = (mode: GameMode) => {
+    if (mode === "texas_holdem") {
+      return { smallBlind, bigBlind };
+    }
+    // PLO/Indian Poker bomb pots: big blind value is the ante; SB set to 0
+    return { smallBlind: 0, bigBlind: ploAnte };
+  };
+
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sessionId) return;
@@ -71,6 +80,7 @@ export default function Home() {
     setIsCreating(true);
 
     try {
+      const stakes = getStakeStructure(selectedMode);
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_ENGINE_URL.replace(/\/+$/, "")}/rooms`,
         {
@@ -80,9 +90,8 @@ export default function Home() {
             ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
           },
           body: JSON.stringify({
-            // PLO/Indian Poker bomb pots: big blind value is the ante; SB set to 0
-            smallBlind: selectedMode === "texas_holdem" ? smallBlind : 0,
-            bigBlind: selectedMode === "texas_holdem" ? bigBlind : ploAnte,
+            smallBlind: stakes.smallBlind,
+            bigBlind: stakes.bigBlind,
             minBuyIn,
             maxBuyIn,
             gameMode: selectedMode,
@@ -221,7 +230,7 @@ export default function Home() {
                   style={{ fontFamily: "Lato, sans-serif" }}
                 >
                   {selectedMode === "indian_poker"
-                    ? "Ante-only bomb pot (all players post ante before seeing cards)"
+                    ? "Ante-only bomb pot (big blind value is ante; small blind is 0)"
                     : "Ante-only bomb pot (big blind value is the ante; small blind is 0)"}
                 </p>
               </div>
