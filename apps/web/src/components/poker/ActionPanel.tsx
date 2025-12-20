@@ -290,7 +290,9 @@ export function ActionPanel({
                 className="rounded-lg bg-whiskey-gold border border-whiskey-gold px-4 sm:px-8 py-2 sm:py-2.5 font-bold text-sm sm:text-base text-tokyo-night shadow-lg transition-all hover:bg-whiskey-gold/90 disabled:opacity-50"
                 style={{ fontFamily: "Roboto Mono, monospace" }}
               >
-                <span className="pointer-events-none">Call ${limits.callAmount}</span>
+                <span className="pointer-events-none">
+                  Call ${limits.callAmount}
+                </span>
               </button>
             )}
           </div>
@@ -323,7 +325,9 @@ export function ActionPanel({
                 </button>
                 <button
                   onClick={() => setExtraAmount(extraMax)}
-                  disabled={disabled || isSubmitting || playerChips > limits.maxBet}
+                  disabled={
+                    disabled || isSubmitting || playerChips > limits.maxBet
+                  }
                   className="rounded bg-mahogany border border-white/10 px-3 py-2 text-xs text-cream-parchment hover:border-whiskey-gold/50 disabled:opacity-50 transition-colors whitespace-nowrap"
                 >
                   <span className="pointer-events-none">All-In</span>

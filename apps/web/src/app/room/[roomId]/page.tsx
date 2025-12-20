@@ -114,7 +114,7 @@ export default function RoomPage({
       return;
     }
 
-    // Show countdown
+    // Show countdown (500ms intervals provide smooth UX without excessive re-renders)
     const countdownInterval = setInterval(() => {
       const currentElapsed = Date.now() - completedAt;
       const remaining = Math.ceil((delayMs - currentElapsed) / 1000);
@@ -124,12 +124,13 @@ export default function RoomPage({
         clearInterval(countdownInterval);
         setHandCompletionCountdown(null);
       }
-    }, 100);
+    }, 500);
 
     return () => clearInterval(countdownInterval);
   }, [gameState?.hand_completed_at]);
 
   // Shrinking progress bar while showdown resolves
+  // Dependencies include hand_completed_at to restart the timer when it changes
   useEffect(() => {
     const isShowdownPhase =
       gameState?.phase === "showdown" || gameState?.phase === "complete";
@@ -156,7 +157,8 @@ export default function RoomPage({
     };
 
     tick();
-    interval = setInterval(tick, 50);
+    // 80ms intervals for smooth visual progress bar animation
+    interval = setInterval(tick, 80);
 
     return () => {
       if (interval) clearInterval(interval);
@@ -649,14 +651,14 @@ export default function RoomPage({
             currentActorSeat={gameState?.current_actor_seat}
             buttonSeat={gameState?.button_seat ?? null}
             boardA={boardA}
-          boardB={boardB}
-          potSize={gameState?.pot_size ?? 0}
-          sidePots={sidePots}
-          phase={gameState?.phase}
-          gameMode={room.game_mode}
-          showdownProgress={isShowdownPhase ? showdownProgress : null}
-          onSeatClick={handleSeatClick}
-        />
+            boardB={boardB}
+            potSize={gameState?.pot_size ?? 0}
+            sidePots={sidePots}
+            phase={gameState?.phase}
+            gameMode={room.game_mode}
+            showdownProgress={isShowdownPhase ? showdownProgress : null}
+            onSeatClick={handleSeatClick}
+          />
         </div>
       </div>
 
