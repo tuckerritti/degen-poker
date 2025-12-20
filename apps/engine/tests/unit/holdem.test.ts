@@ -84,7 +84,9 @@ describe("Texas Hold'em", () => {
       const sbPlayer = result.updatedPlayers.find(
         (p) => p.seat_number !== bbSeat,
       );
-      const bbPlayer = result.updatedPlayers.find((p) => p.seat_number === bbSeat);
+      const bbPlayer = result.updatedPlayers.find(
+        (p) => p.seat_number === bbSeat,
+      );
 
       expect(sbPlayer?.current_bet).toBe(5);
       expect(bbPlayer?.current_bet).toBe(10);

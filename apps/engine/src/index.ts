@@ -15,8 +15,26 @@ import {
 import type { GameStateRow, Room, RoomPlayer, SidePot } from "./types.js";
 import { ActionType } from "@poker/shared";
 import { fetchGameStateSecret } from "./secrets.js";
+import { handCompletionCleanup } from "./cleanup.js";
 
 const app = express();
+
+// Track in-flight requests for graceful shutdown
+let activeRequests = 0;
+let isShuttingDown = false;
+
+app.use((req, res, next) => {
+  if (isShuttingDown) {
+    res.status(503).send("Server is shutting down");
+    return;
+  }
+  activeRequests++;
+  res.on("finish", () => {
+    activeRequests--;
+  });
+  next();
+});
+
 app.use(
   cors({
     origin: corsOrigin === "*" ? true : corsOrigin,
@@ -673,23 +691,28 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
       });
       if (resultsErr) throw resultsErr;
 
-      // Delete game state to trigger hand completion
-      const { error: deleteErr } = await supabase
+      // Mark hand as completed with timestamp for frontend countdown timer
+      // The cleanup scheduler will delete this game_state after HAND_COMPLETE_DELAY_MS
+      const { error: updateErr } = await supabase
         .from("game_states")
-        .delete()
+        .update({ hand_completed_at: new Date().toISOString() })
         .eq("id", gameState.id);
 
-      if (deleteErr) {
-        logger.error({ err: deleteErr }, "failed to delete game_state");
-        throw deleteErr;
+      if (updateErr) {
+        logger.error(
+          { err: updateErr },
+          "failed to update game_state with hand_completed_at",
+        );
+        throw updateErr;
       }
 
       logger.info(
         {
           roomId: room.id,
           handNumber: gameState.hand_number,
+          completedAt: new Date().toISOString(),
         },
-        "hand completed and game_state deleted",
+        "hand marked as completed, cleanup scheduled",
       );
     }
 
@@ -743,6 +766,43 @@ async function fetchLatestGameState(
   return data as GameStateRow | null;
 }
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   logger.info(`Engine listening on ${port}`);
+
+  // Start cleanup scheduler for completed hands
+  handCompletionCleanup.start();
 });
+
+// Graceful shutdown handler
+async function gracefulShutdown(signal: string) {
+  logger.info(`${signal} received, starting graceful shutdown`);
+  isShuttingDown = true;
+
+  // Stop accepting new connections
+  server.close(() => {
+    logger.info("HTTP server closed");
+  });
+
+  // Stop cleanup scheduler and wait for in-progress cleanup
+  await handCompletionCleanup.stop();
+
+  // Wait for active requests to complete (with timeout)
+  const maxWaitMs = 10000;
+  const startTime = Date.now();
+  while (activeRequests > 0 && Date.now() - startTime < maxWaitMs) {
+    logger.info(`Waiting for ${activeRequests} active requests to complete...`);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  if (activeRequests > 0) {
+    logger.warn(
+      `Forcing shutdown with ${activeRequests} active requests still pending`,
+    );
+  }
+
+  logger.info("Graceful shutdown complete");
+  process.exit(0);
+}
+
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));

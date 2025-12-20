@@ -1,5 +1,8 @@
 export const sharedVersion = "0.0.0";
 
+// Constants
+export { HAND_COMPLETE_DELAY_MS } from "./constants";
+
 // Supabase enum mirrors
 export const ACTION_TYPES = [
   "fold",

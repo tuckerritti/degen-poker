@@ -14,7 +14,7 @@ export type Database = {
           created_at: string;
           deck_seed: string;
           full_board1: string[];
-          full_board2: string[];
+          full_board2: string[] | null;
           game_state_id: string;
           id: string;
         };
@@ -22,7 +22,7 @@ export type Database = {
           created_at?: string;
           deck_seed: string;
           full_board1: string[];
-          full_board2: string[];
+          full_board2?: string[] | null;
           game_state_id: string;
           id?: string;
         };
@@ -30,7 +30,7 @@ export type Database = {
           created_at?: string;
           deck_seed?: string;
           full_board1?: string[];
-          full_board2?: string[];
+          full_board2?: string[] | null;
           game_state_id?: string;
           id?: string;
         };
@@ -56,6 +56,7 @@ export type Database = {
           current_actor_seat: number | null;
           current_bet: number | null;
           deck_seed: string;
+          hand_completed_at: string | null;
           hand_number: number;
           id: string;
           last_aggressor_seat: number | null;
@@ -80,6 +81,7 @@ export type Database = {
           current_actor_seat?: number | null;
           current_bet?: number | null;
           deck_seed: string;
+          hand_completed_at?: string | null;
           hand_number: number;
           id?: string;
           last_aggressor_seat?: number | null;
@@ -104,6 +106,7 @@ export type Database = {
           current_actor_seat?: number | null;
           current_bet?: number | null;
           deck_seed?: string;
+          hand_completed_at?: string | null;
           hand_number?: number;
           id?: string;
           last_aggressor_seat?: number | null;

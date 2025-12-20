@@ -16,6 +16,7 @@ interface PokerTableProps {
   sidePots?: Array<{ amount: number; eligibleSeats: number[] }>;
   phase?: string;
   gameMode?: GameMode;
+  showdownProgress?: number | null;
   onSeatClick: (seatNumber: number) => void;
 }
 
@@ -31,8 +32,8 @@ export function PokerTable({
   potSize = 0,
   sidePots = [],
   phase,
-  gameMode,
   onSeatClick,
+  showdownProgress = null,
 }: PokerTableProps) {
   // Detect mobile viewport without triggering hydration mismatch
   const subscribeToMobile = useCallback((callback: () => void) => {
@@ -62,11 +63,10 @@ export function PokerTable({
     ? "clamp(68px, 21vw, 104px)"
     : "clamp(96px, 14vw, 136px)";
 
-  // Hole card count depends on game type (2 for Hold'em, 4 for PLO variants)
-  const holeCardCount = gameMode === "texas_holdem" ? 2 : 4;
-  const holeCardRotationStep = holeCardCount === 2 ? 6 : 8;
-  const holeCardSpread =
-    holeCardCount === 2 ? (isMobile ? 14 : 18) : isMobile ? 12 : 16;
+  // Hole card count depends on game type (4 for PLO variants)
+  const holeCardCount = 4;
+  const holeCardRotationStep = 8;
+  const holeCardSpread = isMobile ? 12 : 16;
 
   // Get seated players (not spectators)
   const seatedPlayers = players.filter((p) => !p.is_spectating);
@@ -445,13 +445,26 @@ export function PokerTable({
 
         {/* Community Cards */}
         {boardA.length > 0 && phase && (
-          <div className="order-1 sm:order-2 scale-95 sm:scale-100">
+          <div className="order-1 sm:order-2 scale-95 sm:scale-100 flex flex-col items-center gap-3 sm:gap-4">
             <CommunityCards
               boardA={boardA}
               boardB={boardB}
               phase={phase}
               myHoleCards={myHoleCards}
             />
+            {showdownProgress !== null && (
+              <div className="w-full flex justify-center">
+                <div className="w-[min(92vw,360px)] sm:w-[420px] rounded-full bg-white/15 border border-whiskey-gold/30 shadow-lg overflow-hidden backdrop-blur-sm">
+                  <div
+                    className="h-3 bg-whiskey-gold shadow-[0_0_14px_rgba(255,196,90,0.65)]"
+                    style={{
+                      width: `${Math.max(0, Math.min(1, showdownProgress)) * 100}%`,
+                      transition: "width 80ms linear",
+                    }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

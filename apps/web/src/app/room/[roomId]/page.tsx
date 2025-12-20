@@ -10,6 +10,7 @@ import { ActionPanel } from "@/components/poker/ActionPanel";
 import { PokerTable } from "@/components/poker/PokerTable";
 import type { Room, BoardState } from "@/types/database";
 import { engineFetch, safeEngineUrl } from "@/lib/engineClient";
+import { HAND_COMPLETE_DELAY_MS } from "@poker/shared";
 
 export default function RoomPage({
   params,
@@ -40,6 +41,10 @@ export default function RoomPage({
   const [nextHandCountdown, setNextHandCountdown] = useState<number | null>(
     null,
   );
+  const [handCompletionCountdown, setHandCompletionCountdown] = useState<
+    number | null
+  >(null);
+  const [showdownProgress, setShowdownProgress] = useState(1);
 
   const myPlayer = players.find((p) => p.auth_user_id === sessionId);
   const isMyTurn =
@@ -90,6 +95,77 @@ export default function RoomPage({
     };
   }, [roomId]);
 
+  // Show countdown timer when hand completes (hand_completed_at is set)
+  useEffect(() => {
+    if (!gameState?.hand_completed_at) {
+      setHandCompletionCountdown(null);
+      return;
+    }
+
+    const completedAt = new Date(
+      gameState.hand_completed_at as unknown as string,
+    ).getTime();
+    const now = Date.now();
+    const elapsed = now - completedAt;
+    const delayMs = HAND_COMPLETE_DELAY_MS;
+
+    if (elapsed >= delayMs) {
+      setHandCompletionCountdown(null);
+      return;
+    }
+
+    // Show countdown (500ms intervals provide smooth UX without excessive re-renders)
+    const countdownInterval = setInterval(() => {
+      const currentElapsed = Date.now() - completedAt;
+      const remaining = Math.ceil((delayMs - currentElapsed) / 1000);
+      setHandCompletionCountdown(remaining > 0 ? remaining : null);
+
+      if (currentElapsed >= delayMs) {
+        clearInterval(countdownInterval);
+        setHandCompletionCountdown(null);
+      }
+    }, 500);
+
+    return () => clearInterval(countdownInterval);
+  }, [gameState?.hand_completed_at]);
+
+  // Shrinking progress bar while showdown resolves
+  // Dependencies include hand_completed_at to restart the timer when it changes
+  // Phase dependency ensures progress resets when transitioning to/from showdown
+  useEffect(() => {
+    const isShowdownPhase =
+      gameState?.phase === "showdown" || gameState?.phase === "complete";
+
+    if (!isShowdownPhase) {
+      setShowdownProgress(1);
+      return;
+    }
+
+    const durationMs = HAND_COMPLETE_DELAY_MS;
+    const startedAt = gameState?.hand_completed_at
+      ? new Date(gameState.hand_completed_at as string).getTime()
+      : Date.now();
+    const endsAt = startedAt + durationMs;
+    let rafId: number | null = null;
+
+    const tick = () => {
+      const remaining = endsAt - Date.now();
+      const ratio = Math.max(0, Math.min(1, remaining / durationMs));
+      setShowdownProgress(ratio);
+
+      if (remaining > 0) {
+        rafId = requestAnimationFrame(tick);
+      }
+    };
+
+    // Use requestAnimationFrame for smooth 60fps animation (better performance and battery life)
+    rafId = requestAnimationFrame(tick);
+
+    return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
+  }, [gameState?.phase, gameState?.hand_completed_at]);
+
   // Auto-deal next hand after current hand ends
   useEffect(() => {
     // Calculate seated players
@@ -110,7 +186,9 @@ export default function RoomPage({
       seatedPlayerCount >= 2 &&
       isOwner
     ) {
-      const delayMs = room.inter_hand_delay || 3000;
+      // Note: Changed from || to ?? to respect explicit 0 value (no delay)
+      // Previously 0 would fallback to 3000ms default
+      const delayMs = room.inter_hand_delay ?? 0;
 
       // Show countdown
       let elapsed = 0;
@@ -442,18 +520,16 @@ export default function RoomPage({
     : "grid-rows-[auto_1fr]";
 
   const gameModeLabel =
-    room?.game_mode === "texas_holdem"
-      ? "Texas Hold'em"
-      : room?.game_mode === "double_board_bomb_pot_plo"
-        ? "Double Board Bomb Pot PLO"
-        : "Loading game...";
+    room?.game_mode === "double_board_bomb_pot_plo"
+      ? "Double Board Bomb Pot PLO"
+      : "Loading game...";
 
-  const stakesLabel =
-    room?.game_mode === "texas_holdem"
-      ? `Blinds: ${room.small_blind}/${room.big_blind}`
-      : room
-        ? `Bomb pot ante (BB): ${room.big_blind}`
-        : "Loading stakes...";
+  const isShowdownPhase =
+    gameState?.phase === "showdown" || gameState?.phase === "complete";
+
+  const stakesLabel = room
+    ? `Bomb pot ante (BB): ${room.big_blind}`
+    : "Loading stakes...";
 
   return (
     <div
@@ -547,6 +623,14 @@ export default function RoomPage({
                 Deal Hand
               </button>
             )}
+            {handCompletionCountdown !== null && (
+              <div
+                className="w-full sm:w-auto rounded-md bg-black/40 border border-whiskey-gold/50 px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-semibold text-whiskey-gold"
+                style={{ fontFamily: "Lato, sans-serif" }}
+              >
+                Next hand in {handCompletionCountdown}s...
+              </div>
+            )}
             {nextHandCountdown !== null && (
               <div
                 className="w-full sm:w-auto rounded-md bg-black/40 border border-whiskey-gold/50 px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-semibold text-whiskey-gold"
@@ -575,6 +659,7 @@ export default function RoomPage({
             sidePots={sidePots}
             phase={gameState?.phase}
             gameMode={room.game_mode}
+            showdownProgress={isShowdownPhase ? showdownProgress : null}
             onSeatClick={handleSeatClick}
           />
         </div>
@@ -623,19 +708,16 @@ export default function RoomPage({
       )}
 
       {gameState?.phase === "showdown" && (
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center glass px-6 py-4 sm:px-8 sm:py-6 rounded-lg z-20 max-w-sm mx-3">
-          <p
-            className="text-xl sm:text-2xl font-bold text-whiskey-gold glow-gold"
-            style={{ fontFamily: "Playfair Display, serif" }}
-          >
-            SHOWDOWN!
-          </p>
-          <p
-            className="text-sm text-cream-parchment mt-2"
-            style={{ fontFamily: "Lato, sans-serif" }}
-          >
-            Determining winners...
-          </p>
+        <div className="absolute top-24 sm:top-28 left-1/2 -translate-x-1/2 z-20 w-[min(90vw,520px)] px-4 pointer-events-none">
+          <div className="h-2 w-full overflow-hidden rounded-full bg-white/10 border border-white/10 shadow-lg backdrop-blur-sm">
+            <div
+              className="h-full bg-whiskey-gold"
+              style={{
+                width: `${Math.max(0, Math.min(1, showdownProgress)) * 100}%`,
+                transition: "width 80ms linear",
+              }}
+            />
+          </div>
         </div>
       )}
 
