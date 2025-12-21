@@ -323,7 +323,18 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
   const initialPhase = isHoldem ? "preflop" : "flop";
 
   // Build board state based on game mode
-  let initialBoardState: any;
+  let initialBoardState:
+    | {
+        board1: string[];
+        board2: string[];
+        board3?: string[];
+        visible_player_cards?: Record<string, string[]>;
+      }
+    | {
+        board1: string[];
+        board2: string[];
+        visible_player_cards?: Record<string, string[]>;
+      };
   if (isIndianPoker) {
     initialBoardState = {
       board1: [],

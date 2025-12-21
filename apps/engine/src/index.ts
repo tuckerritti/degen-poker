@@ -15,13 +15,7 @@ import {
   calculateSidePots,
   endOfHandPayout321,
 } from "./logic.js";
-import type {
-  GameStateRow,
-  Room,
-  RoomPlayer,
-  SidePot,
-  PlayerPartitionRow,
-} from "./types.js";
+import type { GameStateRow, Room, RoomPlayer, SidePot } from "./types.js";
 import { ActionType } from "@poker/shared";
 import { fetchGameStateSecret } from "./secrets.js";
 import { handCompletionCleanup } from "./cleanup.js";
@@ -732,6 +726,7 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
       const boardState = (gameState.board_state ?? null) as {
         board1?: string[];
         board2?: string[];
+        board3?: string[];
       } | null;
 
       const allWinners = payouts.map((p) => p.seat);
@@ -742,7 +737,7 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
         final_pot: outcome.potAwarded ?? gameState.pot_size ?? 0,
         board_a: boardState?.board1 ?? null,
         board_b: boardState?.board2 ?? null,
-        board_c: (boardState as any)?.board3 ?? null,
+        board_c: boardState?.board3 ?? null,
         winners: allWinners,
         action_history:
           outcome.updatedGameState.action_history ?? gameState.action_history,

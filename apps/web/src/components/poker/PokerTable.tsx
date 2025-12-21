@@ -16,7 +16,7 @@ interface PokerTableProps {
   potSize?: number;
   sidePots?: Array<{ amount: number; eligibleSeats: number[] }>;
   phase?: string;
-  gameMode?: GameMode;
+  gameMode?: GameMode | "game_mode_321";
   visiblePlayerCards?: Record<string, string[]>;
   showdownProgress?: number | null;
   onSeatClick: (seatNumber: number) => void;
