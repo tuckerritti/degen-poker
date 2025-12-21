@@ -148,7 +148,10 @@ vi.mock("../../src/supabase.js", () => {
       })),
     })),
     insert: vi.fn((payload: GameStateRow) => {
-      const withId: GameStateRow = { ...payload, id: payload.id ?? "gs-inserted" };
+      const withId: GameStateRow = {
+        ...payload,
+        id: payload.id ?? "gs-inserted",
+      };
       mockState.createdGameStates.push(withId);
       return {
         select: vi.fn(() => ({
@@ -195,7 +198,10 @@ vi.mock("../../src/supabase.js", () => {
           if (mockState.authError) {
             return { data: null, error: mockState.authError };
           }
-          return { data: { user: { id: mockState.currentUserId } }, error: null };
+          return {
+            data: { user: { id: mockState.currentUserId } },
+            error: null,
+          };
         }),
       },
       from: vi.fn((table: string) => {

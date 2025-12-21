@@ -20,19 +20,22 @@ export function GameModeSelector({
   const [isOpen, setIsOpen] = useState(false);
   const [selected, setSelected] = useState<GameMode>(nextMode ?? currentMode);
 
-  const options: Array<{ value: GameMode; label: string; description: string }> =
-    [
-      {
-        value: "double_board_bomb_pot_plo",
-        label: "Double Board PLO",
-        description: "Pot-limit, two boards, bomb pot every hand",
-      },
-      {
-        value: "texas_holdem",
-        label: "Texas Hold'em",
-        description: "No-limit, single board",
-      },
-    ];
+  const options: Array<{
+    value: GameMode;
+    label: string;
+    description: string;
+  }> = [
+    {
+      value: "double_board_bomb_pot_plo",
+      label: "Double Board PLO",
+      description: "Pot-limit, two boards, bomb pot every hand",
+    },
+    {
+      value: "texas_holdem",
+      label: "Texas Hold'em",
+      description: "No-limit, single board",
+    },
+  ];
 
   const handleOpen = () => {
     if (disabled) return;
