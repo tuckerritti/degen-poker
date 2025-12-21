@@ -52,7 +52,7 @@ export function Card({ card, faceDown = false, size = "md" }: CardProps) {
           alt="Card back"
           fill
           sizes="(max-width: 640px) 64px, 128px"
-          className="object-cover"
+          className="object-cover opacity-60"
           priority
         />
         {/* Outer inset frame to give structure over the image */}
