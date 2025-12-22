@@ -491,6 +491,7 @@ export function PokerTable({
             {!isEmpty &&
               phase &&
               !player.has_folded &&
+              !player.waiting_for_next_hand &&
               (!isMobile || isMyPlayer) && (
                 <div
                   className={`absolute left-1/2 -translate-x-1/2 ${holeCardsOffsetClass} ${holeCardsZClass}`}
