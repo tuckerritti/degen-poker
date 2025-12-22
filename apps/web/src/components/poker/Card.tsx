@@ -7,37 +7,20 @@ interface CardProps {
 }
 
 export function Card({ card, faceDown = false, size = "md" }: CardProps) {
+  const baseSize = {
+    container: "w-10 sm:w-12 h-14 sm:h-16",
+    cornerRank: "text-xs",
+    cornerSuit: "text-sm",
+    centerSuit: "text-xl sm:text-2xl",
+    backIcon: "text-lg sm:text-xl",
+    padding: "p-0.5",
+    border: "border-[1.5px]",
+    rounded: "rounded-md",
+  };
   const sizeConfig = {
-    sm: {
-      container: "w-10 sm:w-12 h-14 sm:h-16",
-      cornerRank: "text-xs",
-      cornerSuit: "text-sm",
-      centerSuit: "text-xl sm:text-2xl",
-      backIcon: "text-lg sm:text-xl",
-      padding: "p-0.5",
-      border: "border-[1.5px]",
-      rounded: "rounded-md",
-    },
-    md: {
-      container: "w-12 sm:w-16 h-16 sm:h-24",
-      cornerRank: "text-xs sm:text-base",
-      cornerSuit: "text-base sm:text-xl",
-      centerSuit: "text-3xl sm:text-4xl",
-      backIcon: "text-2xl sm:text-3xl",
-      padding: "p-0.5 sm:p-1",
-      border: "border-2",
-      rounded: "rounded-lg",
-    },
-    lg: {
-      container: "w-16 sm:w-20 h-20 sm:h-28",
-      cornerRank: "text-sm sm:text-lg",
-      cornerSuit: "text-lg sm:text-2xl",
-      centerSuit: "text-4xl sm:text-5xl",
-      backIcon: "text-3xl sm:text-4xl",
-      padding: "p-1 sm:p-1.5",
-      border: "border-2",
-      rounded: "rounded-lg",
-    },
+    sm: baseSize,
+    md: baseSize,
+    lg: baseSize,
   };
 
   const config = sizeConfig[size];
