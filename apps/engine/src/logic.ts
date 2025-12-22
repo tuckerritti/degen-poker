@@ -35,7 +35,13 @@ export function actionOrder(
   buttonSeat: number,
 ): number[] {
   const activeSeats = players
-    .filter((p) => !p.is_spectating && !p.is_sitting_out && p.chip_stack > 0)
+    .filter(
+      (p) =>
+        !p.is_spectating &&
+        !p.is_sitting_out &&
+        !p.waiting_for_next_hand &&
+        p.chip_stack > 0,
+    )
     .map((p) => p.seat_number)
     .sort((a, b) => a - b);
   if (activeSeats.length === 0) return [];
@@ -90,7 +96,11 @@ export function postBlinds(
   bigBlind: number,
 ): BlindPostingResult {
   const activePlayers = players.filter(
-    (p) => !p.is_spectating && !p.is_sitting_out && p.chip_stack > 0,
+    (p) =>
+      !p.is_spectating &&
+      !p.is_sitting_out &&
+      !p.waiting_for_next_hand &&
+      p.chip_stack > 0,
   );
 
   const order = actionOrder(activePlayers, buttonSeat);
@@ -212,7 +222,11 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
   });
 
   const activePlayers = players.filter(
-    (p) => !p.is_spectating && !p.is_sitting_out && p.chip_stack > 0,
+    (p) =>
+      !p.is_spectating &&
+      !p.is_sitting_out &&
+      !p.waiting_for_next_hand &&
+      p.chip_stack > 0,
   );
 
   // Determine game mode configuration
@@ -397,10 +411,21 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
     action_history: [],
   };
 
+  const mergedUpdatedPlayers = new Map<string, Partial<RoomPlayer>>();
+  activatedPlayers.forEach((p) => {
+    if (!p.id) return;
+    mergedUpdatedPlayers.set(p.id, { ...p });
+  });
+  updatedPlayers.forEach((p) => {
+    if (!p.id) return;
+    const existing = mergedUpdatedPlayers.get(p.id);
+    mergedUpdatedPlayers.set(p.id, existing ? { ...existing, ...p } : { ...p });
+  });
+
   return {
     gameState,
     playerHands,
-    updatedPlayers: [...activatedPlayers, ...updatedPlayers],
+    updatedPlayers: Array.from(mergedUpdatedPlayers.values()),
     deckSeed,
     fullBoard1: board1,
     fullBoard2: board2,
@@ -440,6 +465,7 @@ function activeNonFolded(players: RoomPlayer[]): RoomPlayer[] {
       !p.has_folded &&
       !p.is_spectating &&
       !p.is_sitting_out &&
+      !p.waiting_for_next_hand &&
       p.chip_stack >= 0,
   );
 }
@@ -490,7 +516,12 @@ export function applyAction(
     };
   }
 
-  if (player.has_folded || player.is_spectating || player.is_sitting_out) {
+  if (
+    player.has_folded ||
+    player.is_spectating ||
+    player.is_sitting_out ||
+    player.waiting_for_next_hand
+  ) {
     return {
       updatedGameState: {},
       updatedPlayers: [],
@@ -723,6 +754,7 @@ export function applyAction(
       p.has_folded ||
       p.is_spectating ||
       p.is_sitting_out ||
+      p.waiting_for_next_hand ||
       (p.current_bet ?? 0) === currentBet ||
       p.is_all_in,
   );
@@ -731,7 +763,11 @@ export function applyAction(
 
   if (awaiting === 0 && allBetsEqual) {
     const activeNonFoldedPlayers = players.filter(
-      (p) => !p.has_folded && !p.is_spectating && !p.is_sitting_out,
+      (p) =>
+        !p.has_folded &&
+        !p.is_spectating &&
+        !p.is_sitting_out &&
+        !p.waiting_for_next_hand,
     );
     const nonAllInCount = activeNonFoldedPlayers.filter(
       (p) => !p.is_all_in,
@@ -866,7 +902,8 @@ export function applyAction(
           !pl.has_folded &&
           !pl.is_all_in &&
           !pl.is_sitting_out &&
-          !pl.is_spectating
+          !pl.is_spectating &&
+          !pl.waiting_for_next_hand
         );
       });
       currentActor = seatsToAct[0] ?? null;
@@ -997,7 +1034,13 @@ export function applyAction(
     if (nextPhase === "showdown" || nextPhase === "complete") {
       // For now: split pot equally among all non-folded players
       // TODO: Implement proper PLO hand evaluation
-      const activePlayers = players.filter((p) => !p.has_folded);
+      const activePlayers = players.filter(
+        (p) =>
+          !p.has_folded &&
+          !p.is_spectating &&
+          !p.is_sitting_out &&
+          !p.waiting_for_next_hand,
+      );
       autoWinners = activePlayers.map((p) => p.seat_number);
       potAwarded = pot;
     }
@@ -1478,6 +1521,7 @@ export function calculateSidePots(
       !p.has_folded &&
       !p.is_spectating &&
       !p.is_sitting_out &&
+      !p.waiting_for_next_hand &&
       (p.total_invested_this_hand ?? 0) > 0,
   );
 

@@ -658,7 +658,13 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
         return updated ? { ...p, ...updated } : p;
       });
 
-      const activePlayers = mergedPlayers.filter((p) => !p.has_folded);
+      const activePlayers = mergedPlayers.filter(
+        (p) =>
+          !p.has_folded &&
+          !p.is_spectating &&
+          !p.is_sitting_out &&
+          !p.waiting_for_next_hand,
+      );
       let payouts: { seat: number; amount: number }[] = [];
 
       if (activePlayers.length === 1) {
@@ -741,7 +747,10 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
           return credit ? { ...p, ...credit } : p;
         });
         const activeSeated = finalPlayers.filter(
-          (p) => !p.is_spectating && !p.is_sitting_out,
+          (p) =>
+            !p.is_spectating &&
+            !p.is_sitting_out &&
+            !p.waiting_for_next_hand,
         );
         const withChips = activeSeated.filter((p) => (p.chip_stack ?? 0) > 0);
         const shouldAutoPause =
@@ -870,7 +879,8 @@ app.post("/rooms/:roomId/partitions", async (req: Request, res: Response) => {
     if (
       actingPlayer.has_folded ||
       actingPlayer.is_sitting_out ||
-      actingPlayer.is_spectating
+      actingPlayer.is_spectating ||
+      actingPlayer.waiting_for_next_hand
     ) {
       return res
         .status(400)
@@ -974,7 +984,13 @@ app.post("/rooms/:roomId/partitions", async (req: Request, res: Response) => {
 
     // Check submission progress
     const requiredSeats = players
-      .filter((p) => !p.has_folded && !p.is_spectating && !p.is_sitting_out)
+      .filter(
+        (p) =>
+          !p.has_folded &&
+          !p.is_spectating &&
+          !p.is_sitting_out &&
+          !p.waiting_for_next_hand,
+      )
       .map((p) => p.seat_number);
 
     const { data: submittedRows, error: submittedErr } = await supabase
@@ -1140,7 +1156,10 @@ app.post("/rooms/:roomId/partitions", async (req: Request, res: Response) => {
         : p;
     });
     const activeSeated = finalPlayers.filter(
-      (p) => !p.is_spectating && !p.is_sitting_out,
+      (p) =>
+        !p.is_spectating &&
+        !p.is_sitting_out &&
+        !p.waiting_for_next_hand,
     );
     const withChips = activeSeated.filter((p) => (p.chip_stack ?? 0) > 0);
     const shouldAutoPause = activeSeated.length === 2 && withChips.length === 1;
