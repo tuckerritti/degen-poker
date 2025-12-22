@@ -89,28 +89,8 @@ export function PokerTable({
       : is321
         ? 6
         : 4;
-  const holeCardRotationStep =
-    holeCardCount === 2
-      ? 6
-      : holeCardCount === 1
-        ? 0
-        : holeCardCount === 6
-          ? 6
-          : 8;
-  const holeCardSpread =
-    holeCardCount === 2
-      ? isMobile
-        ? 14
-        : 18
-      : holeCardCount === 1
-        ? 0
-        : holeCardCount === 6
-          ? isMobile
-            ? 10
-            : 14
-          : isMobile
-            ? 12
-            : 16;
+  const holeCardRotationStep = holeCardCount === 1 ? 0 : 6;
+  const holeCardSpread = holeCardCount === 1 ? 0 : isMobile ? 10 : 14;
 
   // State for fold card reveal (Indian Poker)
   const [revealedFoldedCard, setRevealedFoldedCard] = useState<{
