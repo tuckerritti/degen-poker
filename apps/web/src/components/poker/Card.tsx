@@ -93,7 +93,7 @@ export function Card({ card, faceDown = false, size = "md" }: CardProps) {
 
   return (
     <div
-      className={`${config.container} ${config.rounded} ${config.border} relative z-40 border-gray-300 bg-white shadow-lg transition-transform hover:scale-105`}
+      className={`${config.container} ${config.rounded} ${config.border} relative z-40 border-gray-300 bg-white shadow-lg`}
     >
       {/* Center - Rank and Suit */}
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">

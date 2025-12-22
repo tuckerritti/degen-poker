@@ -8,7 +8,8 @@
     },
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["apps/*/.next/**", "packages/*/dist/**"]
+      "cache": false,
+      "outputs": [".next/**"]
     },
     "lint": {
       "outputs": []

@@ -7,3 +7,9 @@
  * The frontend uses this constant to show a countdown timer.
  */
 export const HAND_COMPLETE_DELAY_MS = 5000;
+
+/**
+ * Duration to wait after hand completion in 321 game mode.
+ * Longer delay allows players to review partitions across all 3 boards.
+ */
+export const HAND_COMPLETE_DELAY_321_MS = 15000;

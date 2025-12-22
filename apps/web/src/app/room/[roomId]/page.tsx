@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import { useSession } from "@/lib/hooks/useSession";
 import { useRoomPlayers } from "@/lib/hooks/useRoomPlayers";
 import { useGameState } from "@/lib/hooks/useGameState";
@@ -8,6 +8,7 @@ import { usePlayerHand } from "@/lib/hooks/usePlayerHand";
 import { getBrowserClient } from "@/lib/supabase/client";
 import { ActionPanel } from "@/components/poker/ActionPanel";
 import { PokerTable } from "@/components/poker/PokerTable";
+import { Card } from "@/components/poker/Card";
 import type { Room, BoardState } from "@/types/database";
 import { engineFetch, safeEngineUrl } from "@/lib/engineClient";
 import { HAND_COMPLETE_DELAY_MS } from "@poker/shared";
@@ -38,13 +39,17 @@ export default function RoomPage({
   const [rebuyAmount, setRebuyAmount] = useState(100);
   const [isRebuying, setIsRebuying] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
-  const [nextHandCountdown, setNextHandCountdown] = useState<number | null>(
-    null,
-  );
-  const [handCompletionCountdown, setHandCompletionCountdown] = useState<
-    number | null
-  >(null);
+  const [, setNextHandCountdown] = useState<number | null>(null);
+  const [, setHandCompletionCountdown] = useState<number | null>(null);
   const [showdownProgress, setShowdownProgress] = useState(1);
+  const [showdownTransitionMs, setShowdownTransitionMs] = useState(0);
+  const [partitionAssignment, setPartitionAssignment] = useState<
+    Array<"board1" | "board2" | "board3">
+  >([]);
+  const [partitionSubmitting, setPartitionSubmitting] = useState(false);
+  const [, setPartitionStatus] = useState<string | null>(null);
+  const [, setPartitionError] = useState<string | null>(null);
+  const [hasSubmittedPartition, setHasSubmittedPartition] = useState(false);
 
   const myPlayer = players.find((p) => p.auth_user_id === sessionId);
   const isMyTurn =
@@ -107,7 +112,9 @@ export default function RoomPage({
     ).getTime();
     const now = Date.now();
     const elapsed = now - completedAt;
-    const delayMs = HAND_COMPLETE_DELAY_MS;
+    // Use longer delay for 321 mode to give players time to see all partitions
+    const is321Mode = room?.game_mode === "game_mode_321";
+    const delayMs = is321Mode ? 15000 : HAND_COMPLETE_DELAY_MS;
 
     if (elapsed >= delayMs) {
       setHandCompletionCountdown(null);
@@ -127,7 +134,15 @@ export default function RoomPage({
     }, 500);
 
     return () => clearInterval(countdownInterval);
-  }, [gameState?.hand_completed_at]);
+  }, [gameState?.hand_completed_at, room?.game_mode]);
+
+  // Reset partition submission state when phase changes from partition
+  useEffect(() => {
+    const isPartition = gameState?.phase === "partition";
+    if (!isPartition && hasSubmittedPartition) {
+      setHasSubmittedPartition(false);
+    }
+  }, [gameState?.phase, hasSubmittedPartition]);
 
   // Shrinking progress bar while showdown resolves
   // Dependencies include hand_completed_at to restart the timer when it changes
@@ -137,34 +152,48 @@ export default function RoomPage({
       gameState?.phase === "showdown" || gameState?.phase === "complete";
 
     if (!isShowdownPhase) {
+      setShowdownTransitionMs(0);
       setShowdownProgress(1);
       return;
     }
 
-    const durationMs = HAND_COMPLETE_DELAY_MS;
-    const startedAt = gameState?.hand_completed_at
-      ? new Date(gameState.hand_completed_at as string).getTime()
-      : Date.now();
-    const endsAt = startedAt + durationMs;
-    let rafId: number | null = null;
+    // Wait for hand_completed_at to be set before starting animation
+    // This prevents race condition where phase updates before timestamp is set
+    if (!gameState?.hand_completed_at) {
+      setShowdownTransitionMs(0);
+      setShowdownProgress(1); // Keep bar at 100% while waiting
+      return;
+    }
 
-    const tick = () => {
-      const remaining = endsAt - Date.now();
-      const ratio = Math.max(0, Math.min(1, remaining / durationMs));
-      setShowdownProgress(ratio);
+    // Use longer showdown time for 321 mode to give players time to see all partitions
+    const is321Mode = room?.game_mode === "game_mode_321";
+    const durationMs = is321Mode ? 15000 : HAND_COMPLETE_DELAY_MS;
+    const now = Date.now();
+    const rawStartedAt = new Date(gameState.hand_completed_at as string).getTime();
+    const startedAt = Number.isFinite(rawStartedAt)
+      ? Math.min(rawStartedAt, now)
+      : now;
+    const elapsed = Math.min(Math.max(now - startedAt, 0), durationMs);
+    const remainingMs = Math.max(durationMs - elapsed, 0);
+    const initialRatio = durationMs > 0 ? remainingMs / durationMs : 0;
 
-      if (remaining > 0) {
-        rafId = requestAnimationFrame(tick);
-      }
-    };
+    // Apply initial width immediately without animation, then animate to 0 once.
+    setShowdownTransitionMs(0);
+    setShowdownProgress(initialRatio);
 
-    // Use requestAnimationFrame for smooth 60fps animation (better performance and battery life)
-    rafId = requestAnimationFrame(tick);
+    if (remainingMs <= 0) {
+      return;
+    }
+
+    const rafId = requestAnimationFrame(() => {
+      setShowdownTransitionMs(remainingMs);
+      setShowdownProgress(0);
+    });
 
     return () => {
-      if (rafId !== null) cancelAnimationFrame(rafId);
+      cancelAnimationFrame(rafId);
     };
-  }, [gameState?.phase, gameState?.hand_completed_at]);
+  }, [gameState?.phase, gameState?.hand_completed_at, room?.game_mode]);
 
   // Auto-deal next hand after current hand ends
   useEffect(() => {
@@ -448,6 +477,253 @@ export default function RoomPage({
     alert("Room link copied to clipboard!");
   };
 
+  const handlePartitionSubmit = async () => {
+    if (!canPartition || !myPlayer) return;
+    const { b1, b2, b3 } = partitionBoards;
+    if (!(b1.length === 3 && b2.length === 2 && b3.length === 1)) {
+      setPartitionError("You must assign 3 / 2 / 1 cards to boards A / B / C.");
+      return;
+    }
+    setPartitionError(null);
+    setPartitionStatus(null);
+    setPartitionSubmitting(true);
+    try {
+      const response = await engineFetch(
+        `/rooms/${roomId}/partitions`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            seatNumber: myPlayer.seat_number,
+            threeBoardCards: b1,
+            twoBoardCards: b2,
+            oneBoardCard: b3,
+          }),
+        },
+        accessToken ?? undefined,
+      );
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to submit partition");
+      }
+      // Hide panel immediately after successful submission
+      setHasSubmittedPartition(true);
+      if (data.completed) {
+        setPartitionStatus("Submitted! All players partitioned. Resolving hand...");
+      } else if (data.pendingSeats) {
+        setPartitionStatus(
+          `Submitted. Waiting on seats: ${data.pendingSeats.join(", ")}`,
+        );
+      } else {
+        setPartitionStatus("Submitted.");
+      }
+    } catch (err) {
+      setPartitionError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setPartitionSubmitting(false);
+    }
+  };
+
+  // Get my hole cards from PRIVATE player_hands table (per POKER_PLAN.md)
+  // RLS ensures we only see our own cards
+  const myHoleCards: string[] = useMemo(
+    () => ((playerHand?.cards as unknown as string[]) || []),
+    [playerHand],
+  );
+
+  // Default partition assignment (first 3 / next 2 / last 1)
+  useEffect(() => {
+    if (myHoleCards.length !== 6) {
+      setPartitionAssignment([]);
+      return;
+    }
+    setPartitionAssignment([
+      "board1",
+      "board1",
+      "board1",
+      "board2",
+      "board2",
+      "board3",
+    ]);
+  }, [myHoleCards]);
+
+  // Get community cards and visible player cards from board_state JSONB
+  const boardStateData = useMemo(() => {
+    if (!gameState?.board_state) {
+      return {
+        boardA: [] as string[],
+        boardB: [] as string[],
+        boardC: [] as string[],
+        visiblePlayerCards: {} as Record<string, string[]>,
+        playerPartitions: {} as Record<
+          string,
+          { threeBoardCards: string[]; twoBoardCards: string[]; oneBoardCard: string[] }
+        >,
+        reconstructedCards: null as Record<string, string[]> | null,
+        hasBoardState: false,
+      };
+    }
+
+    const boardState = gameState.board_state as unknown as BoardState;
+    const boardA = boardState.board1 || [];
+    const boardB = boardState.board2 || [];
+    const boardC = boardState.board3 || [];
+    let visiblePlayerCards = boardState.visible_player_cards || {};
+
+    // Use revealed_partitions during showdown, otherwise use player_partitions
+    const rawPartitions =
+      boardState.revealed_partitions || boardState.player_partitions || {};
+
+    // Convert revealed_partitions format (snake_case) to playerPartitions format (camelCase)
+    const playerPartitions = Object.entries(rawPartitions).reduce(
+      (acc, [seat, partition]) => {
+        acc[seat] = {
+          threeBoardCards:
+            "three_board_cards" in partition
+              ? partition.three_board_cards
+              : partition.threeBoardCards,
+          twoBoardCards:
+            "two_board_cards" in partition
+              ? partition.two_board_cards
+              : partition.twoBoardCards,
+          oneBoardCard:
+            "one_board_card" in partition
+              ? partition.one_board_card
+              : partition.oneBoardCard,
+        };
+        return acc;
+      },
+      {} as Record<
+        string,
+        { threeBoardCards: string[]; twoBoardCards: string[]; oneBoardCard: string[] }
+      >,
+    );
+
+    let reconstructedCards: Record<string, string[]> | null = null;
+    // For 321 mode showdown: populate visiblePlayerCards from revealed_partitions
+    // This allows all players to see everyone's hole cards during showdown
+    if (boardState.revealed_partitions) {
+      reconstructedCards = Object.entries(boardState.revealed_partitions).reduce(
+        (acc, [seat, partition]) => {
+          // Concatenate all partition cards to reconstruct the full 6-card hand
+          acc[seat] = [
+            ...partition.three_board_cards,
+            ...partition.two_board_cards,
+            ...partition.one_board_card,
+          ];
+          return acc;
+        },
+        {} as Record<string, string[]>,
+      );
+
+      // Merge with existing visiblePlayerCards (for Indian Poker compatibility)
+      visiblePlayerCards = { ...visiblePlayerCards, ...reconstructedCards };
+    }
+
+    return {
+      boardA,
+      boardB,
+      boardC,
+      visiblePlayerCards,
+      playerPartitions,
+      reconstructedCards,
+      hasBoardState: true,
+    };
+  }, [gameState?.board_state]);
+
+  const {
+    boardA,
+    boardB,
+    boardC,
+    visiblePlayerCards,
+    playerPartitions,
+    reconstructedCards,
+    hasBoardState,
+  } = boardStateData;
+
+  useEffect(() => {
+    if (!hasBoardState) return;
+    if (reconstructedCards) {
+      console.log(
+        "Revealed partitions found! Reconstructed cards:",
+        reconstructedCards,
+      );
+    }
+    console.log("Board state received:", {
+      boardA,
+      boardB,
+      boardC,
+      boardALength: boardA.length,
+      boardBLength: boardB.length,
+      boardCLength: boardC.length,
+      visiblePlayerCards,
+      playerPartitions,
+    });
+  }, [
+    hasBoardState,
+    reconstructedCards,
+    boardA,
+    boardB,
+    boardC,
+    visiblePlayerCards,
+    playerPartitions,
+  ]);
+
+  // Extract side pots from game state
+  const sidePots = gameState?.side_pots
+    ? (gameState.side_pots as unknown as Array<{
+        amount: number;
+        eligibleSeats: number[];
+      }>)
+    : [];
+
+  const partitionBoards = useMemo(() => {
+    const b1: string[] = [];
+    const b2: string[] = [];
+    const b3: string[] = [];
+    myHoleCards.forEach((card, index) => {
+      const dest = partitionAssignment[index];
+      if (dest === "board1") b1.push(card);
+      else if (dest === "board2") b2.push(card);
+      else if (dest === "board3") b3.push(card);
+    });
+    return { b1, b2, b3 };
+  }, [myHoleCards, partitionAssignment]);
+
+  const playerPartitionsForDisplay = useMemo(() => {
+    if (!hasSubmittedPartition || myPlayer?.seat_number === undefined) {
+      return playerPartitions;
+    }
+    const seatKey = myPlayer.seat_number.toString();
+    if (
+      playerPartitions[seatKey] ||
+      partitionBoards.b1.length !== 3 ||
+      partitionBoards.b2.length !== 2 ||
+      partitionBoards.b3.length !== 1
+    ) {
+      return playerPartitions;
+    }
+    return {
+      ...playerPartitions,
+      [seatKey]: {
+        threeBoardCards: partitionBoards.b1,
+        twoBoardCards: partitionBoards.b2,
+        oneBoardCard: partitionBoards.b3,
+      },
+    };
+  }, [hasSubmittedPartition, myPlayer?.seat_number, partitionBoards, playerPartitions]);
+
+  const roomGameMode = room?.game_mode as unknown as string;
+  const isPartitionPhase =
+    roomGameMode === "game_mode_321" &&
+    (gameState?.phase as string) === "partition";
+  const canPartition =
+    isPartitionPhase &&
+    myPlayer &&
+    !myPlayer.has_folded &&
+    myHoleCards.length === 6 &&
+    !hasSubmittedPartition;
+
   if (sessionLoading || roomLoading || playersLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-tokyo-night">
@@ -473,37 +749,6 @@ export default function RoomPage({
       </div>
     );
   }
-
-  // Get my hole cards from PRIVATE player_hands table (per POKER_PLAN.md)
-  // RLS ensures we only see our own cards
-  const myHoleCards: string[] =
-    (playerHand?.cards as unknown as string[]) || [];
-
-  // Get community cards and visible player cards from board_state JSONB
-  let boardA: string[] = [];
-  let boardB: string[] = [];
-  let visiblePlayerCards: Record<string, string[]> = {};
-  if (gameState?.board_state) {
-    const boardState = gameState.board_state as unknown as BoardState;
-    boardA = boardState.board1 || [];
-    boardB = boardState.board2 || [];
-    visiblePlayerCards = boardState.visible_player_cards || {};
-    console.log("Board state received:", {
-      boardA,
-      boardB,
-      boardALength: boardA.length,
-      boardBLength: boardB.length,
-      visiblePlayerCards,
-    });
-  }
-
-  // Extract side pots from game state
-  const sidePots = gameState?.side_pots
-    ? (gameState.side_pots as unknown as Array<{
-        amount: number;
-        eligibleSeats: number[];
-      }>)
-    : [];
 
   const activePlayers = players.filter((p) => !p.is_spectating);
   const seatedPlayers = activePlayers.length;
@@ -626,22 +871,6 @@ export default function RoomPage({
                 Deal Hand
               </button>
             )}
-            {handCompletionCountdown !== null && (
-              <div
-                className="w-full sm:w-auto rounded-md bg-black/40 border border-whiskey-gold/50 px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-semibold text-whiskey-gold"
-                style={{ fontFamily: "Lato, sans-serif" }}
-              >
-                Next hand in {handCompletionCountdown}s...
-              </div>
-            )}
-            {nextHandCountdown !== null && (
-              <div
-                className="w-full sm:w-auto rounded-md bg-black/40 border border-whiskey-gold/50 px-2 py-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-semibold text-whiskey-gold"
-                style={{ fontFamily: "Lato, sans-serif" }}
-              >
-                Next hand in {nextHandCountdown}s...
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -658,12 +887,15 @@ export default function RoomPage({
             buttonSeat={gameState?.button_seat ?? null}
             boardA={boardA}
             boardB={boardB}
+            boardC={boardC}
             potSize={gameState?.pot_size ?? 0}
             sidePots={sidePots}
             phase={gameState?.phase}
             gameMode={room.game_mode}
             visiblePlayerCards={visiblePlayerCards}
+            playerPartitions={playerPartitionsForDisplay}
             showdownProgress={isShowdownPhase ? showdownProgress : null}
+            showdownTransitionMs={isShowdownPhase ? showdownTransitionMs : 0}
             onSeatClick={handleSeatClick}
           />
         </div>
@@ -718,16 +950,204 @@ export default function RoomPage({
               className="h-full bg-whiskey-gold"
               style={{
                 width: `${Math.max(0, Math.min(1, showdownProgress)) * 100}%`,
-                transition: "width 80ms linear",
+                transition:
+                  showdownTransitionMs > 0
+                    ? `width ${showdownTransitionMs}ms linear`
+                    : "none",
               }}
             />
           </div>
         </div>
       )}
 
+      {/* Partition assignment for 321 mode */}
+      {canPartition && (
+        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-4xl border border-whiskey-gold/50 p-4 sm:p-6 shadow-2xl max-h-[80vh] overflow-y-auto backdrop-blur-xl bg-royal-blue/95 rounded-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p
+                  className="text-sm sm:text-base font-semibold text-cream-parchment"
+                  style={{ fontFamily: "Lato, sans-serif" }}
+                >
+                  Partition your 6 cards across the 3 boards (3 / 2 / 1).
+                </p>
+              </div>
+            </div>
+
+            {/* Community Cards Display */}
+            <div className="mt-4 flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center">
+              {boardC.length > 0 && (
+                <div className="flex flex-col items-center gap-1">
+                  <div className="text-xs font-semibold text-cream-parchment">
+                    1 Board
+                  </div>
+                  <div className="flex gap-1 p-2 rounded-lg bg-black/30 border border-white/10">
+                    {boardC.map((card, idx) => (
+                      <Card key={idx} card={card} size="sm" />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {boardB.length > 0 && (
+                <div className="flex flex-col items-center gap-1">
+                  <div className="text-xs font-semibold text-cream-parchment">
+                    2 Board
+                  </div>
+                  <div className="flex gap-1 p-2 rounded-lg bg-black/30 border border-white/10">
+                    {boardB.map((card, idx) => (
+                      <Card key={idx} card={card} size="sm" />
+                    ))}
+                  </div>
+                </div>
+              )}
+              {boardA.length > 0 && (
+                <div className="flex flex-col items-center gap-1">
+                  <div className="text-xs font-semibold text-cream-parchment">
+                    3 Board
+                  </div>
+                  <div className="flex gap-1 p-2 rounded-lg bg-black/30 border border-white/10">
+                    {boardA.map((card, idx) => (
+                      <Card key={idx} card={card} size="sm" />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 border-t border-white/10 pt-4">
+              <p className="text-xs sm:text-sm font-semibold text-cream-parchment mb-3">
+                Assign your 6 cards:
+              </p>
+
+              {/* Grouped preview of assigned cards */}
+              <div className="flex flex-wrap gap-3 sm:gap-4 justify-center items-center mb-4">
+                {/* 3-card group (board1) */}
+                <div className="flex gap-0.5 sm:gap-1">
+                  {partitionBoards.b1.map((card, idx) => (
+                    <Card key={idx} card={card} size="md" />
+                  ))}
+                  {Array.from({ length: 3 - partitionBoards.b1.length }).map((_, idx) => (
+                    <div
+                      key={`empty-b1-${idx}`}
+                      className="w-12 h-16 sm:w-16 sm:h-24 border border-dashed border-whiskey-gold/30 rounded-lg"
+                    />
+                  ))}
+                </div>
+
+                {/* 2-card group (board2) */}
+                <div className="flex gap-0.5 sm:gap-1">
+                  {partitionBoards.b2.map((card, idx) => (
+                    <Card key={idx} card={card} size="md" />
+                  ))}
+                  {Array.from({ length: 2 - partitionBoards.b2.length }).map((_, idx) => (
+                    <div
+                      key={`empty-b2-${idx}`}
+                      className="w-12 h-16 sm:w-16 sm:h-24 border border-dashed border-whiskey-gold/30 rounded-lg"
+                    />
+                  ))}
+                </div>
+
+                {/* 1-card group (board3) */}
+                <div className="flex gap-0.5 sm:gap-1">
+                  {partitionBoards.b3.map((card, idx) => (
+                    <Card key={idx} card={card} size="md" />
+                  ))}
+                  {Array.from({ length: 1 - partitionBoards.b3.length }).map((_, idx) => (
+                    <div
+                      key={`empty-b3-${idx}`}
+                      className="w-12 h-16 sm:w-16 sm:h-24 border border-dashed border-whiskey-gold/30 rounded-lg"
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Grid of selectable cards with assignment buttons */}
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-3">
+              {myHoleCards.map((card, index) => {
+                const assignment = partitionAssignment[index];
+                const buttonClass = (dest: "board1" | "board2" | "board3") =>
+                  `px-2 py-1 rounded-md border text-xs font-semibold transition ${
+                    assignment === dest
+                      ? "bg-whiskey-gold text-tokyo-night border-whiskey-gold"
+                      : "bg-black/40 text-cream-parchment border-white/15 hover:border-whiskey-gold/50"
+                  }`;
+
+                return (
+                  <div
+                    key={`${card}-${index}`}
+                    className="flex w-full flex-col items-center gap-1 rounded-lg border border-white/10 bg-black/30 p-1 sm:p-1.5"
+                  >
+                    <Card card={card} size="md" />
+                    <div className="flex gap-0.5">
+                      <button
+                        type="button"
+                        className={buttonClass("board3")}
+                        onClick={() =>
+                          setPartitionAssignment((prev) => {
+                            const next = [...prev];
+                            next[index] = "board3";
+                            return next;
+                          })
+                        }
+                      >
+                        1
+                      </button>
+                      <button
+                        type="button"
+                        className={buttonClass("board2")}
+                        onClick={() =>
+                          setPartitionAssignment((prev) => {
+                            const next = [...prev];
+                            next[index] = "board2";
+                            return next;
+                          })
+                        }
+                      >
+                        2
+                      </button>
+                      <button
+                        type="button"
+                        className={buttonClass("board1")}
+                        onClick={() =>
+                          setPartitionAssignment((prev) => {
+                            const next = [...prev];
+                            next[index] = "board1";
+                            return next;
+                          })
+                        }
+                      >
+                        3
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+              </div>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={handlePartitionSubmit}
+                disabled={
+                  partitionSubmitting ||
+                  !(partitionBoards.b1.length === 3 &&
+                    partitionBoards.b2.length === 2 &&
+                    partitionBoards.b3.length === 1)
+                }
+                className="rounded-md bg-whiskey-gold px-4 py-2 text-sm font-bold text-tokyo-night shadow-lg hover:bg-whiskey-gold/90 disabled:cursor-not-allowed disabled:bg-whiskey-gold/40"
+              >
+                {partitionSubmitting ? "Submitting..." : "Submit Partition"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Action Panel - Fixed at bottom */}
       {isMyTurn && myPlayer && gameState && room && (
-        <div className="flex-shrink-0 w-full sm:max-w-5xl sm:mx-auto">
+        <div className="flex-shrink-0 w-full sm:max-w-5xl sm:mx-auto px-3 sm:px-6 pb-4 sm:pb-6">
           <ActionPanel
             playerChips={myPlayer.chip_stack}
             playerCurrentBet={myPlayer.current_bet ?? 0}

@@ -1,14 +1,18 @@
 import { supabase } from "./supabase.js";
 import { logger } from "./logger.js";
-import { HAND_COMPLETE_DELAY_MS } from "@poker/shared";
+import {
+  HAND_COMPLETE_DELAY_MS,
+  HAND_COMPLETE_DELAY_321_MS,
+} from "@poker/shared";
 
 /**
  * Cleanup scheduler for completed hands.
- * Runs periodically to delete game_states where hand_completed_at is older than HAND_COMPLETE_DELAY_MS.
+ * Runs periodically to delete game_states where hand_completed_at exceeds the delay period
+ * (5 seconds for standard modes, 15 seconds for 321 mode).
  *
  * This allows the engine to set hand_completed_at and return immediately from the HTTP request,
  * while the cleanup happens asynchronously in the background. This prevents blocking the request
- * handler for 5 seconds and is resilient to engine restarts (database-driven state recovery).
+ * handler and is resilient to engine restarts (database-driven state recovery).
  */
 export class HandCompletionCleanup {
   private intervalId: NodeJS.Timeout | null = null;
@@ -32,9 +36,10 @@ export class HandCompletionCleanup {
     logger.info(
       {
         checkIntervalMs: this.checkIntervalMs,
-        delayMs: HAND_COMPLETE_DELAY_MS,
+        defaultDelayMs: HAND_COMPLETE_DELAY_MS,
+        delay321Ms: HAND_COMPLETE_DELAY_321_MS,
       },
-      "Starting hand completion cleanup scheduler",
+      "Starting hand completion cleanup scheduler (delay varies by game mode)",
     );
 
     this.intervalId = setInterval(() => {
@@ -90,15 +95,15 @@ export class HandCompletionCleanup {
   }
 
   private async performCleanup(): Promise<void> {
-    const cutoffTimestamp = Date.now() - HAND_COMPLETE_DELAY_MS;
-    const cutoffTime = new Date(cutoffTimestamp).toISOString();
+    const now = Date.now();
+    const minCutoffTime = new Date(now - HAND_COMPLETE_DELAY_MS).toISOString();
 
-    // Find all game_states where hand_completed_at is older than cutoff
+    // Find all completed game_states with room info to check game mode
     const { data: completedHands, error: queryErr } = await supabase
       .from("game_states")
-      .select("id, room_id, hand_number, hand_completed_at")
+      .select("id, room_id, hand_number, hand_completed_at, rooms!inner(game_mode)")
       .not("hand_completed_at", "is", null)
-      .lte("hand_completed_at", cutoffTime);
+      .lte("hand_completed_at", minCutoffTime);
 
     if (queryErr) {
       logger.error({ err: queryErr }, "Failed to query completed hands");
@@ -116,8 +121,24 @@ export class HandCompletionCleanup {
       return;
     }
 
+    // Filter hands that have exceeded their game-mode-specific delay
+    const handsToDelete = completedHands.filter((hand) => {
+      const completedAt = new Date(hand.hand_completed_at as string).getTime();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const gameMode = (hand.rooms as any)?.game_mode;
+      const delayMs =
+        gameMode === "game_mode_321"
+          ? HAND_COMPLETE_DELAY_321_MS
+          : HAND_COMPLETE_DELAY_MS;
+      return now >= completedAt + delayMs;
+    });
+
+    if (handsToDelete.length === 0) {
+      return;
+    }
+
     // Batch delete for better performance
-    const handIds = completedHands.map((h) => h.id);
+    const handIds = handsToDelete.map((h) => h.id);
     const { error: deleteErr } = await supabase
       .from("game_states")
       .delete()
@@ -125,7 +146,7 @@ export class HandCompletionCleanup {
 
     if (deleteErr) {
       logger.error(
-        { err: deleteErr, handCount: completedHands.length, handIds },
+        { err: deleteErr, handCount: handsToDelete.length, handIds },
         "Failed to batch delete completed game_states",
       );
     } else {
@@ -133,8 +154,8 @@ export class HandCompletionCleanup {
       this.lastHealthCheckAt = Date.now();
       logger.info(
         {
-          handCount: completedHands.length,
-          hands: completedHands.map((h) => ({
+          handCount: handsToDelete.length,
+          hands: handsToDelete.map((h) => ({
             roomId: h.room_id,
             handNumber: h.hand_number,
             completedAt: h.hand_completed_at,

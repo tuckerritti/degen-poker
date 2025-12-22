@@ -4,7 +4,11 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/hooks/useSession";
 
-type GameMode = "double_board_bomb_pot_plo" | "texas_holdem" | "indian_poker";
+type GameMode =
+  | "double_board_bomb_pot_plo"
+  | "texas_holdem"
+  | "indian_poker"
+  | "game_mode_321";
 
 interface GameModeConfig {
   id: GameMode;
@@ -31,6 +35,12 @@ const GAME_MODES: GameModeConfig[] = [
     name: "Indian Poker",
     enabled: true,
     description: "1 card on forehead, bomb pot antes, high card wins",
+  },
+  {
+    id: "game_mode_321",
+    name: "3-2-1 Bomb Pot",
+    enabled: true,
+    description: "6 hole cards, 3 boards, partition cards after river",
   },
 ];
 
@@ -62,7 +72,7 @@ export default function Home() {
     if (mode === "texas_holdem") {
       return { smallBlind, bigBlind };
     }
-    // PLO/Indian Poker bomb pots: big blind value is the ante; SB set to 0
+    // PLO/Indian Poker/321 bomb pots: big blind value is the ante; SB set to 0
     return { smallBlind: 0, bigBlind: ploAnte };
   };
 
@@ -135,7 +145,7 @@ export default function Home() {
             Select Game Mode
           </h2>
 
-          <div className="mb-6 sm:mb-8 grid gap-3 sm:gap-4 md:grid-cols-3">
+          <div className="mb-6 sm:mb-8 grid gap-3 sm:gap-4 md:grid-cols-2">
             {GAME_MODES.map((mode) => (
               <button
                 key={mode.id}
@@ -229,9 +239,7 @@ export default function Home() {
                   className="mt-1 text-xs text-cigar-ash"
                   style={{ fontFamily: "Lato, sans-serif" }}
                 >
-                  {selectedMode === "indian_poker"
-                    ? "Ante-only bomb pot (big blind value is ante; small blind is 0)"
-                    : "Ante-only bomb pot (big blind value is the ante; small blind is 0)"}
+                  Ante-only bomb pot (big blind value is ante; small blind is 0)
                 </p>
               </div>
             )}

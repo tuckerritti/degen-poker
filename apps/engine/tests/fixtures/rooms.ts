@@ -16,4 +16,5 @@ export const standardRoom: Room = {
   is_active: true,
   last_activity_at: null,
   owner_auth_user_id: null,
+  uses_two_decks: false,
 };

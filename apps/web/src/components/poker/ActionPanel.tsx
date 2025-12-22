@@ -193,7 +193,7 @@ export function ActionPanel({
 
   const mobileButtonClasses = (accent?: "primary" | "danger" | "neutral") => {
     const base =
-      "w-full rounded-lg border px-3 py-3 text-sm font-semibold transition-all touch-target";
+      "w-full rounded-lg border px-3 py-3 text-sm font-semibold transition-all touch-target pointer-events-auto";
     const palette =
       accent === "primary"
         ? "bg-whiskey-gold text-tokyo-night border-whiskey-gold hover:bg-whiskey-gold/90"
@@ -206,10 +206,9 @@ export function ActionPanel({
   if (isMobile) {
     return (
       <div
-        className="glass border-t border-whiskey-gold/20 p-3 shadow-[0_-8px_30px_rgba(0,0,0,0.45)] rounded-t-xl max-w-[520px] mx-auto w-full"
+        className="glass absolute inset-x-0 bottom-0 z-30 pointer-events-auto border-t border-whiskey-gold/20 p-3 shadow-[0_-8px_30px_rgba(0,0,0,0.45)] rounded-t-xl max-w-[520px] mx-auto w-full"
         style={{
           fontFamily: "Lato, sans-serif",
-          paddingBottom: "max(env(safe-area-inset-bottom), 0px)",
         }}
       >
         <div className="flex flex-col gap-3">
@@ -252,10 +251,9 @@ export function ActionPanel({
 
   return (
     <div
-      className="glass border-t border-whiskey-gold/20 p-2 sm:p-3 shadow-[0_-8px_30px_rgba(0,0,0,0.45)] rounded-t-xl sm:rounded-none w-full"
+      className="glass absolute inset-x-0 bottom-0 z-30 pointer-events-auto border-t border-whiskey-gold/20 p-2 sm:p-3 shadow-[0_-8px_30px_rgba(0,0,0,0.45)] rounded-t-xl sm:rounded-none w-full"
       style={{
         fontFamily: "Lato, sans-serif",
-        paddingBottom: "max(env(safe-area-inset-bottom), 0px)",
       }}
     >
       <div className="mx-auto max-w-full sm:max-w-6xl">
@@ -267,7 +265,7 @@ export function ActionPanel({
               <button
                 onClick={() => handleAction("fold")}
                 disabled={disabled || isSubmitting}
-                className="rounded-lg bg-velvet-red border border-velvet-red px-4 sm:px-8 py-2 sm:py-2.5 font-bold text-sm sm:text-base text-cream-parchment shadow-lg transition-all hover:bg-velvet-red/90 disabled:opacity-50"
+                className="pointer-events-auto rounded-lg bg-velvet-red border border-velvet-red px-4 sm:px-8 py-2 sm:py-2.5 font-bold text-sm sm:text-base text-cream-parchment shadow-lg transition-all hover:bg-velvet-red/90 disabled:opacity-50"
               >
                 Fold
               </button>
@@ -277,7 +275,7 @@ export function ActionPanel({
               <button
                 onClick={() => handleAction("check")}
                 disabled={disabled || isSubmitting}
-                className="rounded-lg bg-black/40 border border-white/20 px-4 sm:px-8 py-2 sm:py-2.5 font-bold text-sm sm:text-base text-cream-parchment shadow-lg transition-all hover:bg-black/60 hover:border-whiskey-gold/50 disabled:opacity-50"
+                className="pointer-events-auto rounded-lg bg-black/40 border border-white/20 px-4 sm:px-8 py-2 sm:py-2.5 font-bold text-sm sm:text-base text-cream-parchment shadow-lg transition-all hover:bg-black/60 hover:border-whiskey-gold/50 disabled:opacity-50"
               >
                 Check
               </button>
@@ -287,12 +285,10 @@ export function ActionPanel({
               <button
                 onClick={() => handleAction("call")}
                 disabled={disabled || isSubmitting}
-                className="rounded-lg bg-whiskey-gold border border-whiskey-gold px-4 sm:px-8 py-2 sm:py-2.5 font-bold text-sm sm:text-base text-tokyo-night shadow-lg transition-all hover:bg-whiskey-gold/90 disabled:opacity-50"
+                className="pointer-events-auto rounded-lg bg-whiskey-gold border border-whiskey-gold px-4 sm:px-8 py-2 sm:py-2.5 font-bold text-sm sm:text-base text-tokyo-night shadow-lg transition-all hover:bg-whiskey-gold/90 disabled:opacity-50"
                 style={{ fontFamily: "Roboto Mono, monospace" }}
               >
-                <span className="pointer-events-none">
-                  Call ${limits.callAmount}
-                </span>
+                <span>Call ${limits.callAmount}</span>
               </button>
             )}
           </div>
@@ -305,32 +301,32 @@ export function ActionPanel({
                 <button
                   onClick={() => handleQuickBet(0.5)}
                   disabled={disabled || isSubmitting}
-                  className="rounded bg-mahogany border border-white/10 px-3 py-2 text-xs text-cream-parchment hover:border-whiskey-gold/50 disabled:opacity-50 transition-colors whitespace-nowrap"
+                  className="pointer-events-auto rounded bg-mahogany border border-white/10 px-3 py-2 text-xs text-cream-parchment hover:border-whiskey-gold/50 disabled:opacity-50 transition-colors whitespace-nowrap"
                 >
-                  <span className="pointer-events-none">½ Pot</span>
+                  <span>½ Pot</span>
                 </button>
                 <button
                   onClick={() => handleQuickBet(0.75)}
                   disabled={disabled || isSubmitting}
-                  className="rounded bg-mahogany border border-white/10 px-3 py-2 text-xs text-cream-parchment hover:border-whiskey-gold/50 disabled:opacity-50 transition-colors whitespace-nowrap"
+                  className="pointer-events-auto rounded bg-mahogany border border-white/10 px-3 py-2 text-xs text-cream-parchment hover:border-whiskey-gold/50 disabled:opacity-50 transition-colors whitespace-nowrap"
                 >
-                  <span className="pointer-events-none">¾ Pot</span>
+                  <span>¾ Pot</span>
                 </button>
                 <button
                   onClick={() => handleQuickBet(1)}
                   disabled={disabled || isSubmitting}
-                  className="rounded bg-mahogany border border-white/10 px-3 py-2 text-xs text-cream-parchment hover:border-whiskey-gold/50 disabled:opacity-50 transition-colors whitespace-nowrap"
+                  className="pointer-events-auto rounded bg-mahogany border border-white/10 px-3 py-2 text-xs text-cream-parchment hover:border-whiskey-gold/50 disabled:opacity-50 transition-colors whitespace-nowrap"
                 >
-                  <span className="pointer-events-none">Pot</span>
+                  <span>Pot</span>
                 </button>
                 <button
                   onClick={() => setExtraAmount(extraMax)}
                   disabled={
                     disabled || isSubmitting || playerChips > limits.maxBet
                   }
-                  className="rounded bg-mahogany border border-white/10 px-3 py-2 text-xs text-cream-parchment hover:border-whiskey-gold/50 disabled:opacity-50 transition-colors whitespace-nowrap"
+                  className="pointer-events-auto rounded bg-mahogany border border-white/10 px-3 py-2 text-xs text-cream-parchment hover:border-whiskey-gold/50 disabled:opacity-50 transition-colors whitespace-nowrap"
                 >
-                  <span className="pointer-events-none">All-In</span>
+                  <span>All-In</span>
                 </button>
               </div>
 
@@ -365,10 +361,10 @@ export function ActionPanel({
                   targetTotalBet < limits.minBet ||
                   targetTotalBet > limits.maxBet
                 }
-                className="rounded-lg bg-whiskey-gold border border-whiskey-gold px-4 sm:px-8 py-2 sm:py-2.5 font-bold text-sm sm:text-base text-tokyo-night shadow-lg transition-all hover:bg-whiskey-gold/90 disabled:opacity-50 whitespace-nowrap"
+                className="pointer-events-auto rounded-lg bg-whiskey-gold border border-whiskey-gold px-4 sm:px-8 py-2 sm:py-2.5 font-bold text-sm sm:text-base text-tokyo-night shadow-lg transition-all hover:bg-whiskey-gold/90 disabled:opacity-50 whitespace-nowrap"
                 style={{ fontFamily: "Roboto Mono, monospace" }}
               >
-                <span className="pointer-events-none">
+                <span>
                   {currentBet === 0 ? "Bet" : "Raise"} ${targetTotalBet}
                 </span>
               </button>
@@ -380,10 +376,10 @@ export function ActionPanel({
             <button
               onClick={() => handleAction("all_in")}
               disabled={disabled || isSubmitting}
-              className="rounded-lg bg-whiskey-gold border border-whiskey-gold px-4 sm:px-8 py-2 sm:py-2.5 font-bold text-sm sm:text-base text-tokyo-night shadow-lg transition-all hover:bg-whiskey-gold/90 disabled:opacity-50"
+              className="pointer-events-auto rounded-lg bg-whiskey-gold border border-whiskey-gold px-4 sm:px-8 py-2 sm:py-2.5 font-bold text-sm sm:text-base text-tokyo-night shadow-lg transition-all hover:bg-whiskey-gold/90 disabled:opacity-50"
               style={{ fontFamily: "Roboto Mono, monospace" }}
             >
-              <span className="pointer-events-none">All-In ${playerChips}</span>
+              <span>All-In ${playerChips}</span>
             </button>
           )}
         </div>

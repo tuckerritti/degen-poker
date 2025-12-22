@@ -18,7 +18,8 @@
   },
   "devDependencies": {
     "prettier": "^3.7.4",
-    "turbo": "^2.7.0",
+    "react-scan": "^0.4.3",
+    "turbo": "^2.7.1",
     "typescript": "^5.9.3"
   }
 }
