@@ -39,20 +39,16 @@ export default function RoomPage({
   const [rebuyAmount, setRebuyAmount] = useState(100);
   const [isRebuying, setIsRebuying] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
-  const [nextHandCountdown, setNextHandCountdown] = useState<number | null>(
-    null,
-  );
-  const [handCompletionCountdown, setHandCompletionCountdown] = useState<
-    number | null
-  >(null);
+  const [, setNextHandCountdown] = useState<number | null>(null);
+  const [, setHandCompletionCountdown] = useState<number | null>(null);
   const [showdownProgress, setShowdownProgress] = useState(1);
   const [showdownTransitionMs, setShowdownTransitionMs] = useState(0);
   const [partitionAssignment, setPartitionAssignment] = useState<
     Array<"board1" | "board2" | "board3">
   >([]);
   const [partitionSubmitting, setPartitionSubmitting] = useState(false);
-  const [partitionStatus, setPartitionStatus] = useState<string | null>(null);
-  const [partitionError, setPartitionError] = useState<string | null>(null);
+  const [, setPartitionStatus] = useState<string | null>(null);
+  const [, setPartitionError] = useState<string | null>(null);
   const [hasSubmittedPartition, setHasSubmittedPartition] = useState(false);
 
   const myPlayer = players.find((p) => p.auth_user_id === sessionId);
