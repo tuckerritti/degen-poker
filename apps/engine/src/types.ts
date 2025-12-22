@@ -16,7 +16,7 @@ export interface Room {
   is_active: boolean;
   last_activity_at: string | null;
   owner_auth_user_id: string | null;
-  uses_two_decks: boolean;  // For 321 mode with many players
+  uses_two_decks: boolean; // For 321 mode with many players
 }
 
 export interface RoomPlayer {
@@ -33,6 +33,7 @@ export interface RoomPlayer {
   is_all_in: boolean;
   is_sitting_out: boolean;
   is_spectating: boolean;
+  waiting_for_next_hand: boolean;
   connected_at: string | null;
   last_action_at: string | null;
 }
@@ -64,11 +65,14 @@ export interface GameStateRow {
     board1?: string[];
     board2?: string[];
     board3?: string[]; // 3rd board for 321 mode
-    revealed_partitions?: Record<number, {
-      three_board_cards: string[];
-      two_board_cards: string[];
-      one_board_card: string[];
-    }>; // Revealed at showdown in 321 mode
+    revealed_partitions?: Record<
+      number,
+      {
+        three_board_cards: string[];
+        two_board_cards: string[];
+        one_board_card: string[];
+      }
+    >; // Revealed at showdown in 321 mode
   } | null;
   side_pots: SidePot[] | null;
   action_history: unknown;
@@ -83,7 +87,7 @@ export interface GameStateSecret {
   deck_seed: string;
   full_board1: string[];
   full_board2: string[];
-  full_board3: string[] | null;  // For 321 mode
+  full_board3: string[] | null; // For 321 mode
   created_at: string;
 }
 

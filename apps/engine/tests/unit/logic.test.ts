@@ -1,8 +1,35 @@
 import { describe, it, expect } from "vitest";
-import { nextButtonSeat, actionOrder, advancePhase } from "../../src/logic.js";
+import {
+  nextButtonSeat,
+  actionOrder,
+  advancePhase,
+  dealHand,
+  applyAction,
+} from "../../src/logic.js";
+import type { GameStateRow, Room } from "../../src/types.js";
 import { createPlayer } from "../fixtures/players.js";
 
 describe("Button and Action Order Logic", () => {
+  const createRoom = (overrides: Partial<Room> = {}): Room => ({
+    id: "room-1",
+    game_mode: "texas_holdem",
+    max_players: 9,
+    min_buy_in: 10,
+    max_buy_in: 1000,
+    small_blind: 1,
+    big_blind: 2,
+    button_seat: 1,
+    current_hand_number: 1,
+    inter_hand_delay: 0,
+    is_paused: false,
+    pause_after_hand: false,
+    is_active: true,
+    last_activity_at: null,
+    owner_auth_user_id: null,
+    uses_two_decks: false,
+    ...overrides,
+  });
+
   describe("nextButtonSeat", () => {
     it("should return first seat when button is null", () => {
       const players = [
@@ -185,6 +212,76 @@ describe("Button and Action Order Logic", () => {
       const order = actionOrder(players, 1);
       expect(order).toEqual([3, 5, 1]);
     });
+
+    it("should exclude players waiting for next hand", () => {
+      const players = [
+        createPlayer({ seat_number: 1 }),
+        createPlayer({ seat_number: 2, waiting_for_next_hand: true }),
+        createPlayer({ seat_number: 3 }),
+      ];
+
+      const order = actionOrder(players, 1);
+      expect(order).toEqual([3, 1]);
+      expect(order).not.toContain(2);
+    });
+  });
+
+  describe("waiting_for_next_hand", () => {
+    it("should activate waiting players when a new hand is dealt", () => {
+      const room = createRoom({ button_seat: 1 });
+      const players = [
+        createPlayer({ seat_number: 1 }),
+        createPlayer({ seat_number: 2, waiting_for_next_hand: true }),
+        createPlayer({ seat_number: 3 }),
+      ];
+
+      const { updatedPlayers } = dealHand(room, players);
+      const waitingUpdate = updatedPlayers.find(
+        (player) => player.id === players[1].id,
+      );
+
+      expect(waitingUpdate?.waiting_for_next_hand).toBe(false);
+    });
+
+    it("should prevent waiting players from acting", () => {
+      const room = createRoom();
+      const players = [
+        createPlayer({ seat_number: 1, waiting_for_next_hand: true }),
+        createPlayer({ seat_number: 2 }),
+      ];
+      const gameState: GameStateRow = {
+        id: "game-1",
+        room_id: room.id,
+        hand_number: 1,
+        deck_seed: "hidden",
+        button_seat: 1,
+        phase: "flop",
+        pot_size: 0,
+        current_bet: 0,
+        min_raise: room.big_blind,
+        current_actor_seat: 1,
+        last_aggressor_seat: null,
+        last_raise_amount: null,
+        action_deadline_at: null,
+        action_reopened_to: null,
+        seats_to_act: [1],
+        seats_acted: [],
+        burned_card_indices: [],
+        board_state: { board1: [], board2: [] },
+        side_pots: [],
+        action_history: [],
+        created_at: "2020-01-01T00:00:00.000Z",
+        updated_at: "2020-01-01T00:00:00.000Z",
+      };
+
+      const outcome = applyAction(
+        { room, players, gameState, fullBoard1: [], fullBoard2: [] },
+        1,
+        "check",
+      );
+
+      expect(outcome.error).toBe("Player cannot act");
+    });
   });
 
   describe("advancePhase", () => {
@@ -197,15 +294,21 @@ describe("Button and Action Order Logic", () => {
     });
 
     it("should advance from river to showdown (PLO)", () => {
-      expect(advancePhase("river", "double_board_bomb_pot_plo")).toBe("showdown");
+      expect(advancePhase("river", "double_board_bomb_pot_plo")).toBe(
+        "showdown",
+      );
     });
 
     it("should advance from showdown to complete (PLO)", () => {
-      expect(advancePhase("showdown", "double_board_bomb_pot_plo")).toBe("complete");
+      expect(advancePhase("showdown", "double_board_bomb_pot_plo")).toBe(
+        "complete",
+      );
     });
 
     it("should stay at complete (PLO)", () => {
-      expect(advancePhase("complete", "double_board_bomb_pot_plo")).toBe("complete");
+      expect(advancePhase("complete", "double_board_bomb_pot_plo")).toBe(
+        "complete",
+      );
     });
 
     it("should advance from river to partition (321)", () => {

@@ -169,7 +169,9 @@ export default function RoomPage({
     const is321Mode = room?.game_mode === "game_mode_321";
     const durationMs = is321Mode ? 15000 : HAND_COMPLETE_DELAY_MS;
     const now = Date.now();
-    const rawStartedAt = new Date(gameState.hand_completed_at as string).getTime();
+    const rawStartedAt = new Date(
+      gameState.hand_completed_at as string,
+    ).getTime();
     const startedAt = Number.isFinite(rawStartedAt)
       ? Math.min(rawStartedAt, now)
       : now;
@@ -509,7 +511,9 @@ export default function RoomPage({
       // Hide panel immediately after successful submission
       setHasSubmittedPartition(true);
       if (data.completed) {
-        setPartitionStatus("Submitted! All players partitioned. Resolving hand...");
+        setPartitionStatus(
+          "Submitted! All players partitioned. Resolving hand...",
+        );
       } else if (data.pendingSeats) {
         setPartitionStatus(
           `Submitted. Waiting on seats: ${data.pendingSeats.join(", ")}`,
@@ -527,7 +531,7 @@ export default function RoomPage({
   // Get my hole cards from PRIVATE player_hands table (per POKER_PLAN.md)
   // RLS ensures we only see our own cards
   const myHoleCards: string[] = useMemo(
-    () => ((playerHand?.cards as unknown as string[]) || []),
+    () => (playerHand?.cards as unknown as string[]) || [],
     [playerHand],
   );
 
@@ -557,7 +561,11 @@ export default function RoomPage({
         visiblePlayerCards: {} as Record<string, string[]>,
         playerPartitions: {} as Record<
           string,
-          { threeBoardCards: string[]; twoBoardCards: string[]; oneBoardCard: string[] }
+          {
+            threeBoardCards: string[];
+            twoBoardCards: string[];
+            oneBoardCard: string[];
+          }
         >,
         reconstructedCards: null as Record<string, string[]> | null,
         hasBoardState: false,
@@ -595,7 +603,11 @@ export default function RoomPage({
       },
       {} as Record<
         string,
-        { threeBoardCards: string[]; twoBoardCards: string[]; oneBoardCard: string[] }
+        {
+          threeBoardCards: string[];
+          twoBoardCards: string[];
+          oneBoardCard: string[];
+        }
       >,
     );
 
@@ -603,7 +615,9 @@ export default function RoomPage({
     // For 321 mode showdown: populate visiblePlayerCards from revealed_partitions
     // This allows all players to see everyone's hole cards during showdown
     if (boardState.revealed_partitions) {
-      reconstructedCards = Object.entries(boardState.revealed_partitions).reduce(
+      reconstructedCards = Object.entries(
+        boardState.revealed_partitions,
+      ).reduce(
         (acc, [seat, partition]) => {
           // Concatenate all partition cards to reconstruct the full 6-card hand
           acc[seat] = [
@@ -711,7 +725,12 @@ export default function RoomPage({
         oneBoardCard: partitionBoards.b3,
       },
     };
-  }, [hasSubmittedPartition, myPlayer?.seat_number, partitionBoards, playerPartitions]);
+  }, [
+    hasSubmittedPartition,
+    myPlayer?.seat_number,
+    partitionBoards,
+    playerPartitions,
+  ]);
 
   const roomGameMode = room?.game_mode as unknown as string;
   const isPartitionPhase =
@@ -793,7 +812,7 @@ export default function RoomPage({
       />
 
       {/* Header */}
-      <div className="relative flex-shrink-0 p-2 sm:p-3 z-10 bg-royal-blue/85 backdrop-blur-xl border-b border-white/5">
+      <div className="relative flex-shrink-0 p-2 sm:p-3 z-50 bg-royal-blue/85 backdrop-blur-xl border-b border-white/5">
         <div className="glass rounded-lg p-2 sm:p-3 shadow-lg max-w-6xl mx-auto">
           <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex-1 min-w-0 space-y-0.5">
@@ -1027,12 +1046,14 @@ export default function RoomPage({
                   {partitionBoards.b1.map((card, idx) => (
                     <Card key={idx} card={card} size="md" />
                   ))}
-                  {Array.from({ length: 3 - partitionBoards.b1.length }).map((_, idx) => (
-                    <div
-                      key={`empty-b1-${idx}`}
-                      className="w-12 h-16 sm:w-16 sm:h-24 border border-dashed border-whiskey-gold/30 rounded-lg"
-                    />
-                  ))}
+                  {Array.from({ length: 3 - partitionBoards.b1.length }).map(
+                    (_, idx) => (
+                      <div
+                        key={`empty-b1-${idx}`}
+                        className="w-12 h-16 sm:w-16 sm:h-24 border border-dashed border-whiskey-gold/30 rounded-lg"
+                      />
+                    ),
+                  )}
                 </div>
 
                 {/* 2-card group (board2) */}
@@ -1040,12 +1061,14 @@ export default function RoomPage({
                   {partitionBoards.b2.map((card, idx) => (
                     <Card key={idx} card={card} size="md" />
                   ))}
-                  {Array.from({ length: 2 - partitionBoards.b2.length }).map((_, idx) => (
-                    <div
-                      key={`empty-b2-${idx}`}
-                      className="w-12 h-16 sm:w-16 sm:h-24 border border-dashed border-whiskey-gold/30 rounded-lg"
-                    />
-                  ))}
+                  {Array.from({ length: 2 - partitionBoards.b2.length }).map(
+                    (_, idx) => (
+                      <div
+                        key={`empty-b2-${idx}`}
+                        className="w-12 h-16 sm:w-16 sm:h-24 border border-dashed border-whiskey-gold/30 rounded-lg"
+                      />
+                    ),
+                  )}
                 </div>
 
                 {/* 1-card group (board3) */}
@@ -1053,76 +1076,78 @@ export default function RoomPage({
                   {partitionBoards.b3.map((card, idx) => (
                     <Card key={idx} card={card} size="md" />
                   ))}
-                  {Array.from({ length: 1 - partitionBoards.b3.length }).map((_, idx) => (
-                    <div
-                      key={`empty-b3-${idx}`}
-                      className="w-12 h-16 sm:w-16 sm:h-24 border border-dashed border-whiskey-gold/30 rounded-lg"
-                    />
-                  ))}
+                  {Array.from({ length: 1 - partitionBoards.b3.length }).map(
+                    (_, idx) => (
+                      <div
+                        key={`empty-b3-${idx}`}
+                        className="w-12 h-16 sm:w-16 sm:h-24 border border-dashed border-whiskey-gold/30 rounded-lg"
+                      />
+                    ),
+                  )}
                 </div>
               </div>
 
               {/* Grid of selectable cards with assignment buttons */}
               <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-3">
-              {myHoleCards.map((card, index) => {
-                const assignment = partitionAssignment[index];
-                const buttonClass = (dest: "board1" | "board2" | "board3") =>
-                  `px-2 py-1 rounded-md border text-xs font-semibold transition ${
-                    assignment === dest
-                      ? "bg-whiskey-gold text-tokyo-night border-whiskey-gold"
-                      : "bg-black/40 text-cream-parchment border-white/15 hover:border-whiskey-gold/50"
-                  }`;
+                {myHoleCards.map((card, index) => {
+                  const assignment = partitionAssignment[index];
+                  const buttonClass = (dest: "board1" | "board2" | "board3") =>
+                    `px-2 py-1 rounded-md border text-xs font-semibold transition ${
+                      assignment === dest
+                        ? "bg-whiskey-gold text-tokyo-night border-whiskey-gold"
+                        : "bg-black/40 text-cream-parchment border-white/15 hover:border-whiskey-gold/50"
+                    }`;
 
-                return (
-                  <div
-                    key={`${card}-${index}`}
-                    className="flex w-full flex-col items-center gap-1 rounded-lg border border-white/10 bg-black/30 p-1 sm:p-1.5"
-                  >
-                    <Card card={card} size="md" />
-                    <div className="flex gap-0.5">
-                      <button
-                        type="button"
-                        className={buttonClass("board3")}
-                        onClick={() =>
-                          setPartitionAssignment((prev) => {
-                            const next = [...prev];
-                            next[index] = "board3";
-                            return next;
-                          })
-                        }
-                      >
-                        1
-                      </button>
-                      <button
-                        type="button"
-                        className={buttonClass("board2")}
-                        onClick={() =>
-                          setPartitionAssignment((prev) => {
-                            const next = [...prev];
-                            next[index] = "board2";
-                            return next;
-                          })
-                        }
-                      >
-                        2
-                      </button>
-                      <button
-                        type="button"
-                        className={buttonClass("board1")}
-                        onClick={() =>
-                          setPartitionAssignment((prev) => {
-                            const next = [...prev];
-                            next[index] = "board1";
-                            return next;
-                          })
-                        }
-                      >
-                        3
-                      </button>
+                  return (
+                    <div
+                      key={`${card}-${index}`}
+                      className="flex w-full flex-col items-center gap-1 rounded-lg border border-white/10 bg-black/30 p-1 sm:p-1.5"
+                    >
+                      <Card card={card} size="md" />
+                      <div className="flex gap-0.5">
+                        <button
+                          type="button"
+                          className={buttonClass("board3")}
+                          onClick={() =>
+                            setPartitionAssignment((prev) => {
+                              const next = [...prev];
+                              next[index] = "board3";
+                              return next;
+                            })
+                          }
+                        >
+                          1
+                        </button>
+                        <button
+                          type="button"
+                          className={buttonClass("board2")}
+                          onClick={() =>
+                            setPartitionAssignment((prev) => {
+                              const next = [...prev];
+                              next[index] = "board2";
+                              return next;
+                            })
+                          }
+                        >
+                          2
+                        </button>
+                        <button
+                          type="button"
+                          className={buttonClass("board1")}
+                          onClick={() =>
+                            setPartitionAssignment((prev) => {
+                              const next = [...prev];
+                              next[index] = "board1";
+                              return next;
+                            })
+                          }
+                        >
+                          3
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
               </div>
             </div>
 
@@ -1132,9 +1157,11 @@ export default function RoomPage({
                 onClick={handlePartitionSubmit}
                 disabled={
                   partitionSubmitting ||
-                  !(partitionBoards.b1.length === 3 &&
+                  !(
+                    partitionBoards.b1.length === 3 &&
                     partitionBoards.b2.length === 2 &&
-                    partitionBoards.b3.length === 1)
+                    partitionBoards.b3.length === 1
+                  )
                 }
                 className="rounded-md bg-whiskey-gold px-4 py-2 text-sm font-bold text-tokyo-night shadow-lg hover:bg-whiskey-gold/90 disabled:cursor-not-allowed disabled:bg-whiskey-gold/40"
               >

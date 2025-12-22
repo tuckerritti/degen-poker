@@ -23,16 +23,22 @@ export interface BoardState {
   board2?: string[]; // e.g., ["2s", "9c", "Qd", "Jh", "3d"]
   board3?: string[]; // 3rd board for 321 mode
   visible_player_cards?: Record<string, string[]>; // For Indian Poker: seat number -> cards
-  player_partitions?: Record<string, {
-    threeBoardCards: string[];
-    twoBoardCards: string[];
-    oneBoardCard: string[];
-  }>; // For 321 mode: seat number -> partition assignment
-  revealed_partitions?: Record<string, {
-    three_board_cards: string[];
-    two_board_cards: string[];
-    one_board_card: string[];
-  }>; // For 321 mode showdown: revealed partitions from all players
+  player_partitions?: Record<
+    string,
+    {
+      threeBoardCards: string[];
+      twoBoardCards: string[];
+      oneBoardCard: string[];
+    }
+  >; // For 321 mode: seat number -> partition assignment
+  revealed_partitions?: Record<
+    string,
+    {
+      three_board_cards: string[];
+      two_board_cards: string[];
+      one_board_card: string[];
+    }
+  >; // For 321 mode showdown: revealed partitions from all players
 }
 
 export interface SidePot {

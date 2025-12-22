@@ -15,8 +15,8 @@ export interface DealResult {
   deckSeed: string;
   fullBoard1: string[];
   fullBoard2: string[];
-  fullBoard3?: string[];  // For 321 mode
-  usesTwoDecks: boolean;  // Indicates if two decks were used
+  fullBoard3?: string[]; // For 321 mode
+  usesTwoDecks: boolean; // Indicates if two decks were used
 }
 
 export function nextButtonSeat(
@@ -35,7 +35,13 @@ export function actionOrder(
   buttonSeat: number,
 ): number[] {
   const activeSeats = players
-    .filter((p) => !p.is_spectating && !p.is_sitting_out && p.chip_stack > 0)
+    .filter(
+      (p) =>
+        !p.is_spectating &&
+        !p.is_sitting_out &&
+        !p.waiting_for_next_hand &&
+        p.chip_stack > 0,
+    )
     .map((p) => p.seat_number)
     .sort((a, b) => a - b);
   if (activeSeats.length === 0) return [];
@@ -90,7 +96,11 @@ export function postBlinds(
   bigBlind: number,
 ): BlindPostingResult {
   const activePlayers = players.filter(
-    (p) => !p.is_spectating && !p.is_sitting_out && p.chip_stack > 0,
+    (p) =>
+      !p.is_spectating &&
+      !p.is_sitting_out &&
+      !p.waiting_for_next_hand &&
+      p.chip_stack > 0,
   );
 
   const order = actionOrder(activePlayers, buttonSeat);
@@ -189,8 +199,34 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
   // Generate a cryptographically strong, non-guessable seed and never expose it to clients
   const deckSeed = randomBytes(32).toString("hex");
 
+  // Activate players who were waiting for next hand
+  const waitingPlayers = players.filter((p) => p.waiting_for_next_hand);
+  const activatedPlayers: Partial<RoomPlayer>[] = waitingPlayers.map((p) => ({
+    id: p.id,
+    room_id: p.room_id,
+    seat_number: p.seat_number,
+    auth_user_id: p.auth_user_id,
+    display_name: p.display_name,
+    total_buy_in: p.total_buy_in,
+    chip_stack: p.chip_stack,
+    waiting_for_next_hand: false,
+    total_invested_this_hand: 0,
+    current_bet: 0,
+    has_folded: false,
+    is_all_in: false,
+  }));
+
+  // Update local player state for subsequent logic
+  waitingPlayers.forEach((p) => {
+    p.waiting_for_next_hand = false;
+  });
+
   const activePlayers = players.filter(
-    (p) => !p.is_spectating && !p.is_sitting_out && p.chip_stack > 0,
+    (p) =>
+      !p.is_spectating &&
+      !p.is_sitting_out &&
+      !p.waiting_for_next_hand &&
+      p.chip_stack > 0,
   );
 
   // Determine game mode configuration
@@ -222,7 +258,9 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
     cardsPerPlayer,
     totalBoardCards,
   );
-  const deck = usesTwoDecks ? shuffleDoubleDeck(deckSeed) : shuffleDeck(deckSeed);
+  const deck = usesTwoDecks
+    ? shuffleDoubleDeck(deckSeed)
+    : shuffleDeck(deckSeed);
 
   // Deal hole cards
   let cursor = 0;
@@ -373,10 +411,21 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
     action_history: [],
   };
 
+  const mergedUpdatedPlayers = new Map<string, Partial<RoomPlayer>>();
+  activatedPlayers.forEach((p) => {
+    if (!p.id) return;
+    mergedUpdatedPlayers.set(p.id, { ...p });
+  });
+  updatedPlayers.forEach((p) => {
+    if (!p.id) return;
+    const existing = mergedUpdatedPlayers.get(p.id);
+    mergedUpdatedPlayers.set(p.id, existing ? { ...existing, ...p } : { ...p });
+  });
+
   return {
     gameState,
     playerHands,
-    updatedPlayers,
+    updatedPlayers: Array.from(mergedUpdatedPlayers.values()),
     deckSeed,
     fullBoard1: board1,
     fullBoard2: board2,
@@ -391,7 +440,7 @@ export interface ActionContext {
   gameState: GameStateRow;
   fullBoard1: string[];
   fullBoard2: string[];
-  fullBoard3?: string[];  // For 321 mode
+  fullBoard3?: string[]; // For 321 mode
   playerHands?: Array<{ seat_number: number; cards: string[] }>; // Optional: only needed for Indian Poker showdown
   playerPartitions?: Array<{
     seat_number: number;
@@ -416,6 +465,7 @@ function activeNonFolded(players: RoomPlayer[]): RoomPlayer[] {
       !p.has_folded &&
       !p.is_spectating &&
       !p.is_sitting_out &&
+      !p.waiting_for_next_hand &&
       p.chip_stack >= 0,
   );
 }
@@ -434,7 +484,15 @@ export function applyAction(
   actionType: ActionType,
   amount?: number,
 ): ActionOutcome {
-  const { gameState, players, room, fullBoard1, fullBoard2, fullBoard3, playerPartitions } = ctx;
+  const {
+    gameState,
+    players,
+    room,
+    fullBoard1,
+    fullBoard2,
+    fullBoard3,
+    playerPartitions,
+  } = ctx;
 
   if (
     gameState.current_actor_seat !== seatNumber &&
@@ -458,7 +516,12 @@ export function applyAction(
     };
   }
 
-  if (player.has_folded || player.is_spectating || player.is_sitting_out) {
+  if (
+    player.has_folded ||
+    player.is_spectating ||
+    player.is_sitting_out ||
+    player.waiting_for_next_hand
+  ) {
     return {
       updatedGameState: {},
       updatedPlayers: [],
@@ -691,6 +754,7 @@ export function applyAction(
       p.has_folded ||
       p.is_spectating ||
       p.is_sitting_out ||
+      p.waiting_for_next_hand ||
       (p.current_bet ?? 0) === currentBet ||
       p.is_all_in,
   );
@@ -699,7 +763,11 @@ export function applyAction(
 
   if (awaiting === 0 && allBetsEqual) {
     const activeNonFoldedPlayers = players.filter(
-      (p) => !p.has_folded && !p.is_spectating && !p.is_sitting_out,
+      (p) =>
+        !p.has_folded &&
+        !p.is_spectating &&
+        !p.is_sitting_out &&
+        !p.waiting_for_next_hand,
     );
     const nonAllInCount = activeNonFoldedPlayers.filter(
       (p) => !p.is_all_in,
@@ -804,7 +872,11 @@ export function applyAction(
     seatsToAct = [];
     currentActor = null;
 
-    if (nextPhase !== "complete" && nextPhase !== "showdown" && nextPhase !== "partition") {
+    if (
+      nextPhase !== "complete" &&
+      nextPhase !== "showdown" &&
+      nextPhase !== "partition"
+    ) {
       // reset bets for the new street
       players.forEach((p) => {
         updatedPlayers.push({
@@ -817,6 +889,7 @@ export function applyAction(
           chip_stack: p.chip_stack,
           current_bet: 0,
           total_invested_this_hand: p.total_invested_this_hand,
+          waiting_for_next_hand: p.waiting_for_next_hand,
         });
         p.current_bet = 0;
       });
@@ -830,7 +903,8 @@ export function applyAction(
           !pl.has_folded &&
           !pl.is_all_in &&
           !pl.is_sitting_out &&
-          !pl.is_spectating
+          !pl.is_spectating &&
+          !pl.waiting_for_next_hand
         );
       });
       currentActor = seatsToAct[0] ?? null;
@@ -850,11 +924,14 @@ export function applyAction(
       fullBoard1?: string[];
       fullBoard2?: string[];
       fullBoard3?: string[];
-      revealed_partitions?: Record<number, {
-        three_board_cards: string[];
-        two_board_cards: string[];
-        one_board_card: string[];
-      }>;
+      revealed_partitions?: Record<
+        number,
+        {
+          three_board_cards: string[];
+          two_board_cards: string[];
+          one_board_card: string[];
+        }
+      >;
     } = { ...boardState };
 
     const isHoldem = room.game_mode === "texas_holdem";
@@ -929,15 +1006,19 @@ export function applyAction(
 
       // For 321 mode, reveal all player partitions at showdown
       if (is321 && playerPartitions) {
-        const revealedPartitions: Record<number, {
-          three_board_cards: string[];
-          two_board_cards: string[];
-          one_board_card: string[];
-        }> = {};
+        const revealedPartitions: Record<
+          number,
+          {
+            three_board_cards: string[];
+            two_board_cards: string[];
+            one_board_card: string[];
+          }
+        > = {};
 
         for (const partition of playerPartitions) {
           revealedPartitions[partition.seat_number] = {
-            three_board_cards: partition.three_board_cards as unknown as string[],
+            three_board_cards:
+              partition.three_board_cards as unknown as string[],
             two_board_cards: partition.two_board_cards as unknown as string[],
             one_board_card: partition.one_board_card as unknown as string[],
           };
@@ -954,7 +1035,13 @@ export function applyAction(
     if (nextPhase === "showdown" || nextPhase === "complete") {
       // For now: split pot equally among all non-folded players
       // TODO: Implement proper PLO hand evaluation
-      const activePlayers = players.filter((p) => !p.has_folded);
+      const activePlayers = players.filter(
+        (p) =>
+          !p.has_folded &&
+          !p.is_spectating &&
+          !p.is_sitting_out &&
+          !p.waiting_for_next_hand,
+      );
       autoWinners = activePlayers.map((p) => p.seat_number);
       potAwarded = pot;
     }
@@ -1138,8 +1225,12 @@ function evaluateWithConstraints(
   if (totalCards < 5) {
     try {
       const evaluated = evaluate({
-        holeCards: holeCards as unknown as Parameters<typeof evaluate>[0]["holeCards"],
-        communityCards: board as unknown as Parameters<typeof evaluate>[0]["communityCards"],
+        holeCards: holeCards as unknown as Parameters<
+          typeof evaluate
+        >[0]["holeCards"],
+        communityCards: board as unknown as Parameters<
+          typeof evaluate
+        >[0]["communityCards"],
         minimumHoleCards: minHole,
         maximumHoleCards: maxHole,
       });
@@ -1168,9 +1259,17 @@ function evaluateWithConstraints(
 
         try {
           const evaluated = evaluate({
-            holeCards: combo as unknown as Parameters<typeof evaluate>[0]["holeCards"],
+            holeCards: combo as unknown as Parameters<
+              typeof evaluate
+            >[0]["holeCards"],
           });
-          if (!best || compare(evaluated as Parameters<typeof compare>[0], best as Parameters<typeof compare>[0]) === -1) {
+          if (
+            !best ||
+            compare(
+              evaluated as Parameters<typeof compare>[0],
+              best as Parameters<typeof compare>[0],
+            ) === -1
+          ) {
             best = {
               strength: evaluated.strength,
               hand: evaluated.hand as unknown as string[],
@@ -1423,6 +1522,7 @@ export function calculateSidePots(
       !p.has_folded &&
       !p.is_spectating &&
       !p.is_sitting_out &&
+      !p.waiting_for_next_hand &&
       (p.total_invested_this_hand ?? 0) > 0,
   );
 
@@ -1572,21 +1672,9 @@ export function endOfHandPayout321(
 
   potsToDistribute.forEach((pot) => {
     const eligibleSeats = pot.eligibleSeats;
-    const board1Winners = winnersForBoard(
-      evaluations,
-      "board1",
-      eligibleSeats,
-    );
-    const board2Winners = winnersForBoard(
-      evaluations,
-      "board2",
-      eligibleSeats,
-    );
-    const board3Winners = winnersForBoard(
-      evaluations,
-      "board3",
-      eligibleSeats,
-    );
+    const board1Winners = winnersForBoard(evaluations, "board1", eligibleSeats);
+    const board2Winners = winnersForBoard(evaluations, "board2", eligibleSeats);
+    const board3Winners = winnersForBoard(evaluations, "board3", eligibleSeats);
 
     const board1Seats =
       board1Winners.length > 0 ? board1Winners : eligibleSeats;

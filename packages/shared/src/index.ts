@@ -1,7 +1,10 @@
 export const sharedVersion = "0.0.0";
 
 // Constants
-export { HAND_COMPLETE_DELAY_MS, HAND_COMPLETE_DELAY_321_MS } from "./constants";
+export {
+  HAND_COMPLETE_DELAY_MS,
+  HAND_COMPLETE_DELAY_321_MS,
+} from "./constants";
 
 // Supabase enum mirrors
 export const ACTION_TYPES = [
@@ -80,19 +83,22 @@ export interface ActionHistoryItem {
 export interface PartitionSubmissionPayload {
   roomId: string;
   seatNumber: number;
-  threeBoardCards: string[];  // 3 cards for 3-board
-  twoBoardCards: string[];    // 2 cards for 2-board (PLO)
-  oneBoardCard: string[];     // 1 card for 1-board
+  threeBoardCards: string[]; // 3 cards for 3-board
+  twoBoardCards: string[]; // 2 cards for 2-board (PLO)
+  oneBoardCard: string[]; // 1 card for 1-board
   authUserId?: string | null;
 }
 
 export interface BoardState {
   board1?: string[];
   board2?: string[];
-  board3?: string[];  // For 321 mode
-  player_partitions?: Record<string, {
-    threeBoardCards: string[];
-    twoBoardCards: string[];
-    oneBoardCard: string[];
-  }>;
+  board3?: string[]; // For 321 mode
+  player_partitions?: Record<
+    string,
+    {
+      threeBoardCards: string[];
+      twoBoardCards: string[];
+      oneBoardCard: string[];
+    }
+  >;
 }
