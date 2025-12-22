@@ -4,16 +4,12 @@ import { useEffect } from "react";
 
 export function ReactScan({ enabled = false }: { enabled?: boolean }) {
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || process.env.NODE_ENV === "production") return;
     let isMounted = true;
     void (async () => {
-      try {
-        const { scan } = await import("react-scan");
-        if (isMounted) {
-          scan({ enabled: true });
-        }
-      } catch (error) {
-        console.warn("react-scan is not available:", error);
+      const { scan } = await import("react-scan");
+      if (isMounted) {
+        scan({ enabled: true });
       }
     })();
     return () => {
