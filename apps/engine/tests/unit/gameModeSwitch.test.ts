@@ -233,6 +233,7 @@ const baseRoom: Room = {
   is_active: true,
   last_activity_at: null,
   owner_auth_user_id: "user-1",
+  uses_two_decks: false,
 };
 
 const basePlayers: RoomPlayer[] = [
