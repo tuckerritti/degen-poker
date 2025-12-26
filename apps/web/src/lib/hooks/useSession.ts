@@ -34,13 +34,34 @@ export function useSession() {
             setSessionId(anonData.session.user.id);
             setAccessToken(anonData.session.access_token);
           }
-        } else if (
-          !cancelled &&
-          data.session.user?.id &&
-          data.session.access_token
-        ) {
-          setSessionId(data.session.user.id);
-          setAccessToken(data.session.access_token);
+        } else {
+          const { data: userData, error: userError } =
+            await supabase.auth.getUser();
+          const invalidSession =
+            userError?.status === 401 ||
+            userError?.status === 403 ||
+            (!userError && !userData.user);
+          if (invalidSession) {
+            await supabase.auth.signOut();
+            const { data: anonData, error } =
+              await supabase.auth.signInAnonymously();
+            if (error) throw error;
+            if (
+              !cancelled &&
+              anonData.session?.user?.id &&
+              anonData.session?.access_token
+            ) {
+              setSessionId(anonData.session.user.id);
+              setAccessToken(anonData.session.access_token);
+            }
+          } else if (
+            !cancelled &&
+            data.session.user?.id &&
+            data.session.access_token
+          ) {
+            setSessionId(data.session.user.id);
+            setAccessToken(data.session.access_token);
+          }
         }
       } catch (error) {
         console.error("Failed to fetch session", error);
