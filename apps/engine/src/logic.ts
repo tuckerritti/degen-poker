@@ -51,31 +51,20 @@ export function actionOrder(
 }
 
 /**
- * Convert player hands to visible cards map for Indian Poker during active play
- * Excludes each player's own card for security (client should not see own card)
+ * Reveal all player cards at Indian Poker showdown/complete phase ONLY
+ * This is safe to call ONLY when hand is complete (phase = "complete")
+ * NEVER call this during active play - use get_indian_poker_visible_cards() database function instead
+ *
+ * SECURITY NOTE: This function was previously misused during active play (getVisibleCardsForActivePlayers).
+ * That function has been removed. Use get_indian_poker_visible_cards() for per-player visibility.
+ *
  * @param playerHands Array of player hands with seat numbers and cards
- * @returns Map of seat number to visible cards (other players' cards only)
- */
-export function getVisibleCardsForActivePlayers(
-  playerHands: Array<{ seat_number: number; cards: string[] }>,
-): Record<string, string[]> {
-  // During active play, each player sees all OTHER players' cards
-  // For now, show all cards - frontend will filter own card
-  // TODO: Implement per-player filtering on server side for enhanced security
-  return Object.fromEntries(
-    playerHands.map((h) => [h.seat_number.toString(), h.cards]),
-  );
-}
-
-/**
- * Convert all player hands to visible cards map for Indian Poker at showdown
- * Shows all cards including each player's own card
- * @param playerHands Array of player hands with seat numbers and cards
- * @returns Map of seat number to visible cards (all cards visible)
+ * @returns Map of seat number to all cards (safe at showdown only)
  */
 export function revealAllCardsAtShowdown(
   playerHands: Array<{ seat_number: number; cards: string[] }>,
 ): Record<string, string[]> {
+  // At showdown, all cards are revealed including each player's own card
   return Object.fromEntries(
     playerHands.map((h) => [h.seat_number.toString(), h.cards]),
   );
@@ -356,24 +345,27 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
   const initialPhase = isHoldem ? "preflop" : "flop";
 
   // Build board state based on game mode
+  // SECURITY: Never store unrevealed cards or player hole cards in board_state
+  // - Indian Poker: Do NOT store visible_player_cards (use get_indian_poker_visible_cards function instead)
+  // - PLO/321: Do NOT store fullBoard1/2/3 (keep in game_state_secrets only)
+  // - Only store revealed community cards
   let initialBoardState:
     | {
         board1: string[];
         board2: string[];
         board3?: string[];
-        visible_player_cards?: Record<string, string[]>;
       }
     | {
         board1: string[];
         board2: string[];
-        visible_player_cards?: Record<string, string[]>;
       };
   if (isIndianPoker) {
+    // Indian Poker: No boards, no visible_player_cards
+    // Clients will call get_indian_poker_visible_cards() to get per-player visibility
     initialBoardState = {
       board1: [],
       board2: [],
-      visible_player_cards: getVisibleCardsForActivePlayers(playerHands),
-    }; // Indian Poker: all cards visible during active play, frontend filters own card
+    };
   } else if (isHoldem) {
     initialBoardState = { board1: [], board2: [] }; // No cards shown preflop
   } else if (is321) {
@@ -937,6 +929,8 @@ export function applyAction(
     const isHoldem = room.game_mode === "texas_holdem";
     const is321 = room.game_mode === "game_mode_321";
 
+    // SECURITY FIX: Never store fullBoard1/2/3 in board_state
+    // These must remain in game_state_secrets only
     if (nextPhase === "flop") {
       // Flop: reveal 3 cards (only for Hold'em when transitioning from preflop)
       updatedBoardState.board1 = fullBoard1.slice(0, 3);
@@ -944,13 +938,7 @@ export function applyAction(
       if (is321 && fullBoard3) {
         updatedBoardState.board3 = fullBoard3.slice(0, 3);
       }
-      if (!isHoldem) {
-        updatedBoardState.fullBoard1 = fullBoard1;
-        updatedBoardState.fullBoard2 = fullBoard2;
-        if (is321 && fullBoard3) {
-          updatedBoardState.fullBoard3 = fullBoard3;
-        }
-      }
+      // REMOVED: fullBoard1/2/3 assignments (SECURITY VULNERABILITY)
     } else if (nextPhase === "turn") {
       // Turn: reveal 4 cards
       updatedBoardState.board1 = fullBoard1.slice(0, 4);
@@ -958,13 +946,7 @@ export function applyAction(
       if (is321 && fullBoard3) {
         updatedBoardState.board3 = fullBoard3.slice(0, 4);
       }
-      if (!isHoldem) {
-        updatedBoardState.fullBoard1 = fullBoard1;
-        updatedBoardState.fullBoard2 = fullBoard2;
-        if (is321 && fullBoard3) {
-          updatedBoardState.fullBoard3 = fullBoard3;
-        }
-      }
+      // REMOVED: fullBoard1/2/3 assignments (SECURITY VULNERABILITY)
     } else if (nextPhase === "river") {
       // River: reveal all 5 cards
       updatedBoardState.board1 = fullBoard1.slice(0, 5);
@@ -972,13 +954,7 @@ export function applyAction(
       if (is321 && fullBoard3) {
         updatedBoardState.board3 = fullBoard3.slice(0, 5);
       }
-      if (!isHoldem) {
-        updatedBoardState.fullBoard1 = fullBoard1;
-        updatedBoardState.fullBoard2 = fullBoard2;
-        if (is321 && fullBoard3) {
-          updatedBoardState.fullBoard3 = fullBoard3;
-        }
-      }
+      // REMOVED: fullBoard1/2/3 assignments (SECURITY VULNERABILITY)
     } else if (nextPhase === "partition") {
       // Partition phase (321 mode only): all boards fully revealed, waiting for partitions
       updatedBoardState.board1 = fullBoard1.slice(0, 5);
@@ -986,11 +962,7 @@ export function applyAction(
       if (fullBoard3) {
         updatedBoardState.board3 = fullBoard3.slice(0, 5);
       }
-      updatedBoardState.fullBoard1 = fullBoard1;
-      updatedBoardState.fullBoard2 = fullBoard2;
-      if (fullBoard3) {
-        updatedBoardState.fullBoard3 = fullBoard3;
-      }
+      // REMOVED: fullBoard1/2/3 assignments (SECURITY VULNERABILITY)
     } else if (nextPhase === "showdown" || nextPhase === "complete") {
       // Showdown: reveal all 5 cards
       updatedBoardState.board1 = fullBoard1.slice(0, 5);
@@ -998,11 +970,8 @@ export function applyAction(
       if (is321 && fullBoard3) {
         updatedBoardState.board3 = fullBoard3.slice(0, 5);
       }
-      updatedBoardState.fullBoard1 = fullBoard1;
-      updatedBoardState.fullBoard2 = fullBoard2;
-      if (is321 && fullBoard3) {
-        updatedBoardState.fullBoard3 = fullBoard3;
-      }
+      // REMOVED: fullBoard1/2/3 assignments (SECURITY VULNERABILITY - now only revealing actual cards at showdown)
+      // Note: At showdown, all 5 cards are revealed anyway via board1/2/3, so no additional full boards needed
 
       // For 321 mode, reveal all player partitions at showdown
       if (is321 && playerPartitions) {
