@@ -851,9 +851,17 @@ export default function RoomPage({
   const isShowdownPhase =
     gameState?.phase === "showdown" || gameState?.phase === "complete";
 
-  const board1Winners = handResult?.board1_winners as unknown as number[] | null;
-  const board2Winners = handResult?.board2_winners as unknown as number[] | null;
-  const board3Winners = handResult?.board3_winners as unknown as number[] | null;
+  const isShowdown = gameState?.phase === "showdown";
+
+  const board1Winners = handResult?.board1_winners as unknown as
+    | number[]
+    | null;
+  const board2Winners = handResult?.board2_winners as unknown as
+    | number[]
+    | null;
+  const board3Winners = handResult?.board3_winners as unknown as
+    | number[]
+    | null;
 
   const stakesLabel = room
     ? `Bomb pot ante (BB): ${room.big_blind}`
@@ -983,9 +991,9 @@ export default function RoomPage({
             playerPartitions={playerPartitionsForDisplay}
             showdownProgress={isShowdownPhase ? showdownProgress : null}
             showdownTransitionMs={isShowdownPhase ? showdownTransitionMs : 0}
-            board1Winners={isShowdownPhase ? board1Winners : null}
-            board2Winners={isShowdownPhase ? board2Winners : null}
-            board3Winners={isShowdownPhase ? board3Winners : null}
+            board1Winners={isShowdown ? board1Winners : null}
+            board2Winners={isShowdown ? board2Winners : null}
+            board3Winners={isShowdown ? board3Winners : null}
             onSeatClick={handleSeatClick}
           />
         </div>

@@ -34,7 +34,10 @@ export function useLatestHandResult(roomId: string | null) {
 
         if (!cancelled) {
           if (error) {
-            clientLogger.error("useLatestHandResult: Error fetching hand", error);
+            clientLogger.error(
+              "useLatestHandResult: Error fetching hand",
+              error,
+            );
             setError(error.message);
           } else {
             setHandResult(data);
