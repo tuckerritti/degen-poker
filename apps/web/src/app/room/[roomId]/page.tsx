@@ -52,6 +52,12 @@ export default function RoomPage({
   const [, setPartitionStatus] = useState<string | null>(null);
   const [, setPartitionError] = useState<string | null>(null);
   const [hasSubmittedPartition, setHasSubmittedPartition] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [isSendingFeedback, setIsSendingFeedback] = useState(false);
+  const [feedbackStatus, setFeedbackStatus] = useState<
+    "idle" | "success" | "error"
+  >("idle");
 
   const myPlayer = players.find((p) => p.auth_user_id === sessionId);
   const isMyTurn =
@@ -481,6 +487,55 @@ export default function RoomPage({
     alert("Room link copied to clipboard!");
   };
 
+  const handleFeedbackSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!feedbackText.trim()) {
+      alert("Please enter your feedback");
+      return;
+    }
+
+    setIsSendingFeedback(true);
+    setFeedbackStatus("idle");
+
+    try {
+      const response = await fetch("/api/feedback", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          roomId,
+          playerName: myPlayer?.display_name || "Anonymous",
+          playerId: myPlayer?.id || null,
+          authUserId: sessionId || null,
+          feedback: feedbackText,
+          userAgent:
+            typeof navigator !== "undefined" ? navigator.userAgent : "",
+          timestamp: new Date().toISOString(),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to send feedback");
+      }
+
+      setFeedbackStatus("success");
+      setFeedbackText("");
+
+      // Auto-close modal after 2 seconds
+      setTimeout(() => {
+        setShowFeedbackModal(false);
+        setFeedbackStatus("idle");
+      }, 2000);
+    } catch (error) {
+      console.error("Error sending feedback:", error);
+      setFeedbackStatus("error");
+    } finally {
+      setIsSendingFeedback(false);
+    }
+  };
+
   const handlePartitionSubmit = async () => {
     if (!canPartition || !myPlayer) return;
     const { b1, b2, b3 } = partitionBoards;
@@ -867,6 +922,13 @@ export default function RoomPage({
               style={{ fontFamily: "Lato, sans-serif" }}
             >
               Share
+            </button>
+            <button
+              onClick={() => setShowFeedbackModal(true)}
+              className="w-full sm:w-auto rounded-md bg-black/40 border border-white/10 px-2 py-1.5 sm:px-3 sm:py-2 text-[11px] sm:text-sm text-cream-parchment hover:border-whiskey-gold/50 transition-colors"
+              style={{ fontFamily: "Lato, sans-serif" }}
+            >
+              Feedback
             </button>
             {isOwner && (
               <button
@@ -1573,6 +1635,117 @@ export default function RoomPage({
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Feedback Modal */}
+      {showFeedbackModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-tokyo-night/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-lg glass border border-whiskey-gold/30 p-4 sm:p-6 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2
+                className="text-xl sm:text-2xl font-bold text-cream-parchment"
+                style={{ fontFamily: "Playfair Display, serif" }}
+              >
+                Send Feedback
+              </h2>
+              <button
+                onClick={() => {
+                  setShowFeedbackModal(false);
+                  setFeedbackText("");
+                  setFeedbackStatus("idle");
+                }}
+                className="text-cigar-ash hover:text-cream-parchment transition-colors"
+                disabled={isSendingFeedback}
+              >
+                <svg
+                  className="h-6 w-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            {feedbackStatus === "success" ? (
+              <div className="py-8 text-center">
+                <div className="mb-3 text-5xl">✓</div>
+                <p
+                  className="text-lg font-semibold text-whiskey-gold"
+                  style={{ fontFamily: "Lato, sans-serif" }}
+                >
+                  Thank you for your feedback!
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleFeedbackSubmit} className="space-y-4">
+                <div>
+                  <label
+                    className="block text-sm font-medium text-cigar-ash mb-2"
+                    style={{ fontFamily: "Lato, sans-serif" }}
+                  >
+                    How can we improve the poker experience?
+                  </label>
+                  <textarea
+                    value={feedbackText}
+                    onChange={(e) => setFeedbackText(e.target.value)}
+                    className="w-full h-32 rounded-md border border-white/10 bg-black/40 px-3 py-2 text-cream-parchment focus:border-whiskey-gold focus:outline-none focus:ring-1 focus:ring-whiskey-gold backdrop-blur-sm resize-none"
+                    style={{ fontFamily: "Lato, sans-serif" }}
+                    placeholder="Share your thoughts, report bugs, or suggest features..."
+                    required
+                    maxLength={1000}
+                    disabled={isSendingFeedback}
+                  />
+                  <p
+                    className="mt-1 text-xs text-cigar-ash"
+                    style={{ fontFamily: "Roboto Mono, monospace" }}
+                  >
+                    {feedbackText.length}/1000 characters
+                  </p>
+                </div>
+
+                {feedbackStatus === "error" && (
+                  <p
+                    className="text-sm text-velvet-red"
+                    style={{ fontFamily: "Lato, sans-serif" }}
+                  >
+                    Failed to send feedback. Please try again.
+                  </p>
+                )}
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowFeedbackModal(false);
+                      setFeedbackText("");
+                      setFeedbackStatus("idle");
+                    }}
+                    className="flex-1 rounded-md bg-black/40 border border-white/10 px-4 py-2 text-cream-parchment hover:border-velvet-red/50 transition-colors"
+                    style={{ fontFamily: "Lato, sans-serif" }}
+                    disabled={isSendingFeedback}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSendingFeedback || !feedbackText.trim()}
+                    className="flex-1 rounded-md bg-whiskey-gold px-4 py-2 font-bold text-tokyo-night hover:bg-whiskey-gold/90 disabled:opacity-50 transition-colors"
+                    style={{ fontFamily: "Lato, sans-serif" }}
+                  >
+                    {isSendingFeedback ? "Sending..." : "Send Feedback"}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}
