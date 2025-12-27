@@ -1080,9 +1080,8 @@ app.post("/rooms/:roomId/partitions", async (req: Request, res: Response) => {
           board1,
           board2,
           board3,
-          fullBoard1: board1,
-          fullBoard2: board2,
-          fullBoard3: board3,
+          // SECURITY FIX: Do NOT store fullBoard1/2/3 - boards are already fully revealed at completion
+          // fullBoard fields removed to prevent card leaks
           player_partitions: Object.fromEntries(
             partitions.map((p) => [
               p.seatNumber.toString(),
@@ -1218,6 +1217,90 @@ app.post("/rooms/:roomId/partitions", async (req: Request, res: Response) => {
     res.status(500).json({ error: message });
   }
 });
+
+// ============================================================
+// SECURITY: Indian Poker Visibility Endpoint
+// GET /rooms/:roomId/game-states/:gameStateId/indian-poker-cards?seat=<seatNumber>
+// Returns visible cards for Indian Poker mode (all OTHER players' cards)
+// ============================================================
+const indianPokerCardsQuerySchema = z.object({
+  seat: z.coerce.number().int().positive(),
+});
+
+app.get(
+  "/rooms/:roomId/game-states/:gameStateId/indian-poker-cards",
+  async (req: Request, res: Response) => {
+    try {
+      const { roomId, gameStateId } = req.params;
+      const queryParse = indianPokerCardsQuerySchema.safeParse(req.query);
+
+      if (!queryParse.success) {
+        return res.status(400).json({
+          error: "Invalid query parameters",
+          details: queryParse.success ? [] : queryParse.error.issues,
+        });
+      }
+
+      const { seat: requestingSeat } = queryParse.data;
+
+      // Verify room exists
+      const room = await fetchRoom(roomId);
+      if (!room) {
+        return res.status(404).json({ error: "Room not found" });
+      }
+
+      // Verify game mode is Indian Poker
+      if (room.game_mode !== "indian_poker") {
+        return res.status(400).json({
+          error: "This endpoint is only for Indian Poker mode",
+        });
+      }
+
+      // Verify game state exists and belongs to this room
+      const { data: gameState, error: gsError } = await supabase
+        .from("game_states")
+        .select("*")
+        .eq("id", gameStateId)
+        .eq("room_id", roomId)
+        .maybeSingle();
+
+      if (gsError) throw gsError;
+      if (!gameState) {
+        return res.status(404).json({ error: "Game state not found" });
+      }
+
+      // Call the secure database function to get visible cards
+      const { data: visibleCards, error: cardsError } = await supabase.rpc(
+        "get_indian_poker_visible_cards",
+        {
+          game_state_id_param: gameStateId,
+          requesting_seat_number: requestingSeat,
+        }
+      );
+
+      if (cardsError) throw cardsError;
+
+      // Transform to map format for client
+      const visibleCardsMap: Record<string, string[]> = {};
+      for (const row of visibleCards || []) {
+        visibleCardsMap[row.seat_number.toString()] = [row.visible_card];
+      }
+
+      res.json({
+        gameStateId,
+        requestingSeat,
+        visibleCards: visibleCardsMap,
+      });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      logger.error({ err, errorMessage }, "Error fetching Indian Poker visible cards");
+      res.status(500).json({
+        error: "Failed to fetch visible cards",
+        details: errorMessage,
+      });
+    }
+  }
+);
 
 async function fetchRoom(roomId: string): Promise<Room | null> {
   const { data, error } = await supabase
