@@ -649,8 +649,11 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
 
       const activePlayers = mergedPlayers.filter((p) => !p.has_folded);
       let payouts: { seat: number; amount: number }[] = [];
+      let board1Winners: number[] = [];
+      let board2Winners: number[] = [];
 
       if (activePlayers.length === 1) {
+        board1Winners = [activePlayers[0].seat_number];
         payouts = [
           {
             seat: activePlayers[0].seat_number,
@@ -681,20 +684,25 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
         if (isIndianPoker) {
           // Indian Poker: single card high-card comparison
           const winners = determineIndianPokerWinners(activeHands);
+          board1Winners = winners;
           payouts = endOfHandPayout(sidePots, winners, []);
         } else if (isHoldem) {
           // Texas Hold'em: single board winner determination
           const winners = determineSingleBoardWinners(activeHands, board1);
           // For Hold'em, distribute entire pot to winners (not split between boards)
+          board1Winners = winners;
           payouts = endOfHandPayout(sidePots, winners, []);
         } else {
           // PLO: double board winner determination
-          const { board1Winners, board2Winners } = determineDoubleBoardWinners(
+          const { board1Winners: ploBoard1, board2Winners: ploBoard2 } =
+            determineDoubleBoardWinners(
             activeHands,
             board1,
             board2,
           );
-          payouts = endOfHandPayout(sidePots, board1Winners, board2Winners);
+          board1Winners = ploBoard1;
+          board2Winners = ploBoard2;
+          payouts = endOfHandPayout(sidePots, ploBoard1, ploBoard2);
         }
       }
 
@@ -765,6 +773,9 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
         board_b: boardState?.board2 ?? null,
         board_c: boardState?.board3 ?? null,
         winners: allWinners,
+        board1_winners: board1Winners,
+        board2_winners: board2Winners.length > 0 ? board2Winners : null,
+        board3_winners: null,
         action_history:
           outcome.updatedGameState.action_history ?? gameState.action_history,
         shown_hands: null,
@@ -1089,6 +1100,9 @@ app.post("/rooms/:roomId/partitions", async (req: Request, res: Response) => {
       board_b: board2 ?? null,
       board_c: board3 ?? null,
       winners: payouts.map((p) => p.seat),
+      board1_winners: board1Winners,
+      board2_winners: board2Winners,
+      board3_winners: board3Winners,
       action_history: gameState.action_history,
       shown_hands: null,
     });

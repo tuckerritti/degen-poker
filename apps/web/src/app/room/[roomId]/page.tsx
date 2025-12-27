@@ -5,9 +5,11 @@ import { useSession } from "@/lib/hooks/useSession";
 import { useRoomPlayers } from "@/lib/hooks/useRoomPlayers";
 import { useGameState } from "@/lib/hooks/useGameState";
 import { usePlayerHand } from "@/lib/hooks/usePlayerHand";
+import { useLatestHandResult } from "@/lib/hooks/useLatestHandResult";
 import { getBrowserClient } from "@/lib/supabase/client";
 import { ActionPanel } from "@/components/poker/ActionPanel";
 import { PokerTable } from "@/components/poker/PokerTable";
+import { BoardWinners } from "@/components/poker/BoardWinners";
 import { Card } from "@/components/poker/Card";
 import type { Room, BoardState } from "@/types/database";
 import { engineFetch, safeEngineUrl } from "@/lib/engineClient";
@@ -27,6 +29,7 @@ export default function RoomPage({
   } = useRoomPlayers(roomId);
   const { gameState } = useGameState(roomId);
   const { playerHand } = usePlayerHand(roomId, sessionId);
+  const { handResult } = useLatestHandResult(roomId);
 
   const [room, setRoom] = useState<Room | null>(null);
   const [roomLoading, setRoomLoading] = useState(true);
@@ -775,6 +778,10 @@ export default function RoomPage({
   const isShowdownPhase =
     gameState?.phase === "showdown" || gameState?.phase === "complete";
 
+  const board1Winners = handResult?.board1_winners as unknown as number[] | null;
+  const board2Winners = handResult?.board2_winners as unknown as number[] | null;
+  const board3Winners = handResult?.board3_winners as unknown as number[] | null;
+
   const stakesLabel = room
     ? `Bomb pot ante (BB): ${room.big_blind}`
     : "Loading stakes...";
@@ -959,6 +966,17 @@ export default function RoomPage({
           </div>
         </div>
       )}
+
+      {(gameState?.phase === "showdown" || gameState?.phase === "complete") &&
+        handResult && (
+          <BoardWinners
+            board1Winners={board1Winners}
+            board2Winners={board2Winners}
+            board3Winners={board3Winners}
+            gameMode={room?.game_mode}
+            players={activePlayers}
+          />
+        )}
 
       {/* Partition assignment for 321 mode */}
       {canPartition && (
