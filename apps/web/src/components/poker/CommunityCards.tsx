@@ -25,7 +25,9 @@ export function CommunityCards({
   const is321 = gameMode === "game_mode_321";
 
   return (
-    <div className={`relative z-40 flex flex-col items-center justify-center ${is321 ? "gap-1 sm:gap-1.5" : "gap-2 sm:gap-3"}`}>
+    <div
+      className={`relative z-40 flex flex-col items-center justify-center ${is321 ? "gap-1 sm:gap-1.5" : "gap-2 sm:gap-3"}`}
+    >
       {/* Board A */}
       <div className="flex flex-1 min-w-[220px] max-w-[360px] flex-col items-center gap-1 sm:gap-1.5">
         {/* Hand evaluation for Board A */}
@@ -42,7 +44,11 @@ export function CommunityCards({
             {boardA
               .filter((card) => card != null)
               .map((card, index) => (
-                <Card key={`a-${index}`} card={card} size={is321 ? "sm" : "md"} />
+                <Card
+                  key={`a-${index}`}
+                  card={card}
+                  size={is321 ? "sm" : "md"}
+                />
               ))}
           </div>
           {is321 && (
@@ -66,7 +72,11 @@ export function CommunityCards({
               {boardB
                 .filter((card) => card != null)
                 .map((card, index) => (
-                  <Card key={`b-${index}`} card={card} size={is321 ? "sm" : "md"} />
+                  <Card
+                    key={`b-${index}`}
+                    card={card}
+                    size={is321 ? "sm" : "md"}
+                  />
                 ))}
             </div>
             {is321 && (

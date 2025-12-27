@@ -101,7 +101,9 @@ export class HandCompletionCleanup {
     // Find all completed game_states with room info to check game mode
     const { data: completedHands, error: queryErr } = await supabase
       .from("game_states")
-      .select("id, room_id, hand_number, hand_completed_at, rooms!inner(game_mode)")
+      .select(
+        "id, room_id, hand_number, hand_completed_at, rooms!inner(game_mode)",
+      )
       .not("hand_completed_at", "is", null)
       .lte("hand_completed_at", minCutoffTime);
 

@@ -18,13 +18,19 @@ interface PokerTableProps {
   phase?: string;
   gameMode?: GameMode | "game_mode_321";
   visiblePlayerCards?: Record<string, string[]>;
-  playerPartitions?: Record<string, {
-    threeBoardCards: string[];
-    twoBoardCards: string[];
-    oneBoardCard: string[];
-  }>;
+  playerPartitions?: Record<
+    string,
+    {
+      threeBoardCards: string[];
+      twoBoardCards: string[];
+      oneBoardCard: string[];
+    }
+  >;
   showdownProgress?: number | null;
   showdownTransitionMs?: number;
+  board1Winners?: number[] | null;
+  board2Winners?: number[] | null;
+  board3Winners?: number[] | null;
   onSeatClick: (seatNumber: number) => void;
 }
 
@@ -47,6 +53,9 @@ export function PokerTable({
   onSeatClick,
   showdownProgress = null,
   showdownTransitionMs = 0,
+  board1Winners = null,
+  board2Winners = null,
+  board3Winners = null,
 }: PokerTableProps) {
   // Detect mobile viewport without triggering hydration mismatch
   const subscribeToMobile = useCallback((callback: () => void) => {
@@ -87,7 +96,13 @@ export function PokerTable({
         ? 6
         : 4;
   const holeCardRotationStep =
-    holeCardCount === 2 ? 6 : holeCardCount === 1 ? 0 : holeCardCount === 6 ? 6 : 8;
+    holeCardCount === 2
+      ? 6
+      : holeCardCount === 1
+        ? 0
+        : holeCardCount === 6
+          ? 6
+          : 8;
   const holeCardSpread =
     holeCardCount === 2
       ? isMobile
@@ -140,7 +155,12 @@ export function PokerTable({
     if (!isIndianPoker || !myPlayerId) return;
 
     // Exit early if player hasn't folded or has no cards
-    if (!myHasFolded || !myHoleCards || myHoleCards.length === 0 || !mySeatNumber) {
+    if (
+      !myHasFolded ||
+      !myHoleCards ||
+      myHoleCards.length === 0 ||
+      !mySeatNumber
+    ) {
       return;
     }
 
@@ -245,6 +265,28 @@ export function PokerTable({
     return tableRotation !== 0
       ? rotatePoint(base.x, base.y, tableRotation)
       : base;
+  };
+
+  // Helper function to determine winner status for a seat
+  const getWinnerStatus = (seatNumber: number) => {
+    const wonBoards: string[] = [];
+
+    if (board1Winners?.includes(seatNumber)) wonBoards.push("1");
+    if (board2Winners?.includes(seatNumber)) wonBoards.push("2");
+    if (board3Winners?.includes(seatNumber)) wonBoards.push("3");
+
+    const isWinner = wonBoards.length > 0;
+
+    let displayText = "";
+    if (wonBoards.length === 1) {
+      displayText = `Board ${wonBoards[0]}`;
+    } else if (wonBoards.length === 2) {
+      displayText = `Board ${wonBoards[0]} & ${wonBoards[1]}`;
+    } else if (wonBoards.length === 3) {
+      displayText = `Board ${wonBoards.join(", ")}`;
+    }
+
+    return { isWinner, wonBoards, displayText };
   };
 
   return (
@@ -374,6 +416,12 @@ export function PokerTable({
             ? "z-50"
             : "z-10";
 
+        // Winner/loser status for showdown phase
+        const winnerStatus = isShowdownPhase && !isEmpty
+          ? getWinnerStatus(seatNumber)
+          : null;
+        const isLoser = isShowdownPhase && !isEmpty && !player.has_folded && !winnerStatus?.isWinner;
+
         if (shouldHideEmptySeats && isEmpty) {
           return null;
         }
@@ -384,9 +432,7 @@ export function PokerTable({
             onClick={() => isEmpty && !userHasSeat && onSeatClick(seatNumber)}
             disabled={!isEmpty || userHasSeat}
             className={`absolute -translate-x-1/2 -translate-y-1/2 transition-all ${seatZClass} ${
-              isEmpty && !userHasSeat
-                ? "cursor-pointer"
-                : "cursor-default"
+              isEmpty && !userHasSeat ? "cursor-pointer" : "cursor-default"
             }`}
             style={{
               left: `${position.x}%`,
@@ -400,9 +446,13 @@ export function PokerTable({
                   ? "border-white/20 bg-black/40 hover:border-whiskey-gold/50 hover:bg-black/50"
                   : isEmpty && userHasSeat
                     ? "border-white/20 bg-black/40"
-                    : isMyPlayer
-                      ? "border-whiskey-gold bg-whiskey-gold/20"
-                      : "border-white/20 bg-black/40"
+                    : winnerStatus?.isWinner
+                      ? "border-green-500/30 bg-green-900/25"
+                      : isLoser
+                        ? "border-red-500/30 bg-red-900/25"
+                        : isMyPlayer
+                          ? "border-whiskey-gold bg-whiskey-gold/20"
+                          : "border-white/20 bg-black/40"
               } ${
                 isCurrentActor
                   ? "ring-2 sm:ring-4 ring-whiskey-gold ring-offset-1 sm:ring-offset-2 ring-offset-royal-blue glow-gold"
@@ -427,10 +477,18 @@ export function PokerTable({
                     {player.display_name}
                   </div>
                   <div
-                    className="mt-0.5 text-sm sm:text-base font-bold text-whiskey-gold"
-                    style={{ fontFamily: "Roboto Mono, monospace" }}
+                    className="mt-0.5 text-xs sm:text-sm font-bold"
+                    style={{ fontFamily: "Lato, sans-serif" }}
                   >
-                    ${player.chip_stack}
+                    {winnerStatus?.isWinner ? (
+                      <span className="text-green-400">{winnerStatus.displayText}</span>
+                    ) : isShowdownPhase && !player.has_folded ? (
+                      <span className="text-red-400">Lost</span>
+                    ) : (
+                      <span className="text-whiskey-gold" style={{ fontFamily: "Roboto Mono, monospace" }}>
+                        ${player.chip_stack}
+                      </span>
+                    )}
                   </div>
                   {player.has_folded && (
                     <div className="text-xs font-semibold text-velvet-red">
@@ -440,6 +498,11 @@ export function PokerTable({
                   {player.is_all_in && (
                     <div className="text-xs font-semibold text-whiskey-gold glow-gold">
                       All-In
+                    </div>
+                  )}
+                  {player.waiting_for_next_hand && (
+                    <div className="text-xs font-semibold text-cigar-ash">
+                      Joining Next Hand
                     </div>
                   )}
                 </div>
@@ -474,146 +537,171 @@ export function PokerTable({
             {!isEmpty &&
               phase &&
               !player.has_folded &&
+              !player.waiting_for_next_hand &&
               (!isMobile || isMyPlayer) && (
                 <div
                   className={`absolute left-1/2 -translate-x-1/2 ${holeCardsOffsetClass} ${holeCardsZClass}`}
                 >
-                  {isIndianPoker ? (
-                    // Indian Poker: Single card
-                    // SECURITY: Use visiblePlayerCards for all players
-                    // Show own card face-down during active play, face-up at showdown
-                    (() => {
-                      const displayCard =
-                        visiblePlayerCards?.[
-                          player.seat_number.toString()
-                        ]?.[0] ?? null;
+                  {isIndianPoker
+                    ? // Indian Poker: Single card
+                      // SECURITY: Use visiblePlayerCards for all players
+                      // Show own card face-down during active play, face-up at showdown
+                      (() => {
+                        const displayCard =
+                          visiblePlayerCards?.[
+                            player.seat_number.toString()
+                          ]?.[0] ?? null;
 
-                      // During active play, show own card face-down
-                      // At showdown/complete, show own card face-up
-                      const isShowdownPhase =
-                        phase === "showdown" || phase === "complete";
-                      const showFaceDown = isMyPlayer && !isShowdownPhase;
+                        // During active play, show own card face-down
+                        // At showdown/complete, show own card face-up
+                        const isShowdownPhase =
+                          phase === "showdown" || phase === "complete";
+                        const showFaceDown = isMyPlayer && !isShowdownPhase;
 
-                      // Always show a card (face-down during play, face-up at showdown for own card)
-                      // Other players' cards always face-up
-                      return displayCard ? (
-                        <Card card={displayCard} faceDown={showFaceDown} size="md" />
-                      ) : null;
-                    })()
-                  ) : isMyPlayer && myHoleCards.length > 0 ? (
-                    // My cards: grouped for 321 only if partition data exists, otherwise spread
-                    (() => {
-                      const hasPartition = is321 && myHoleCards.length === 6 &&
-                        playerPartitions[player.seat_number.toString()];
+                        // Always show a card (face-down during play, face-up at showdown for own card)
+                        // Other players' cards always face-up
+                        return displayCard ? (
+                          <Card
+                            card={displayCard}
+                            faceDown={showFaceDown}
+                            size="md"
+                          />
+                        ) : null;
+                      })()
+                    : isMyPlayer && myHoleCards.length > 0
+                      ? // My cards: grouped for 321 only if partition data exists, otherwise spread
+                        (() => {
+                          const hasPartition =
+                            is321 &&
+                            myHoleCards.length === 6 &&
+                            playerPartitions[player.seat_number.toString()];
 
-                      if (hasPartition) {
-                        const { group3, group2, group1 } = getGroupedCards(
-                          myHoleCards,
-                          player.seat_number,
-                        );
-                        return (
-                          <div className="flex gap-2 sm:gap-3">
-                            <div className="flex gap-0.5 sm:gap-1">
-                              {group3.map((card, idx) => (
-                                <Card key={idx} card={card} size="sm" />
-                              ))}
-                            </div>
-                            <div className="flex gap-0.5 sm:gap-1">
-                              {group2.map((card, idx) => (
-                                <Card key={idx} card={card} size="sm" />
-                              ))}
-                            </div>
-                            <div className="flex gap-0.5 sm:gap-1">
-                              {group1.map((card, idx) => (
-                                <Card key={idx} card={card} size="sm" />
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      }
-
-                      // Default: all cards together
-                      return (
-                        <div className="flex gap-0.5 sm:gap-1">
-                          {myHoleCards
-                            .filter((card) => card != null)
-                            .map((card, index) => (
-                              <div
-                                key={index}
-                                className="transition-opacity hover:opacity-60"
-                              >
-                                <Card card={card} size={is321 ? "sm" : "md"} />
+                          if (hasPartition) {
+                            const { group3, group2, group1 } = getGroupedCards(
+                              myHoleCards,
+                              player.seat_number,
+                            );
+                            return (
+                              <div className="flex gap-2 sm:gap-3">
+                                <div className="flex gap-0.5 sm:gap-1">
+                                  {group3.map((card, idx) => (
+                                    <Card key={idx} card={card} size="sm" />
+                                  ))}
+                                </div>
+                                <div className="flex gap-0.5 sm:gap-1">
+                                  {group2.map((card, idx) => (
+                                    <Card key={idx} card={card} size="sm" />
+                                  ))}
+                                </div>
+                                <div className="flex gap-0.5 sm:gap-1">
+                                  {group1.map((card, idx) => (
+                                    <Card key={idx} card={card} size="sm" />
+                                  ))}
+                                </div>
                               </div>
-                            ))}
-                        </div>
-                      );
-                    })()
-                  ) : (() => {
-                    // Other players: check for visible cards at showdown
-                    const visibleCards = visiblePlayerCards?.[player.seat_number.toString()];
-                    const isShowdown = phase === "showdown" || phase === "complete";
+                            );
+                          }
 
-                    // 321 mode at showdown: show grouped cards
-                    if (is321 && isShowdown && visibleCards && visibleCards.length === 6) {
-                      const { group3, group2, group1 } = getGroupedCards(
-                        visibleCards,
-                        player.seat_number,
-                      );
-                      return (
-                        <div className="flex gap-2 sm:gap-3">
-                          <div className="flex gap-0.5 sm:gap-1">
-                            {group3.map((card, idx) => (
-                              <Card key={idx} card={card} size="sm" />
-                            ))}
-                          </div>
-                          <div className="flex gap-0.5 sm:gap-1">
-                            {group2.map((card, idx) => (
-                              <Card key={idx} card={card} size="sm" />
-                            ))}
-                          </div>
-                          <div className="flex gap-0.5 sm:gap-1">
-                            {group1.map((card, idx) => (
-                              <Card key={idx} card={card} size="sm" />
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    // Default: fanned out face-down cards
-                    return (
-                      <div
-                        className="relative flex items-center justify-center"
-                        style={{
-                          width: isMobile
-                            ? "clamp(64px, 24vw, 96px)"
-                            : "clamp(96px, 18vw, 120px)",
-                          height: isMobile ? "52px" : "64px",
-                        }}
-                      >
-                        {Array.from({ length: holeCardCount }, (_, cardIndex) => {
-                          const centerOffset = (holeCardCount - 1) / 2;
-                          const rotation =
-                            (cardIndex - centerOffset) * holeCardRotationStep;
-                          const xOffset =
-                            (cardIndex - centerOffset) * holeCardSpread;
-
+                          // Default: all cards together
                           return (
-                            <div
-                              key={cardIndex}
-                              className="absolute"
-                              style={{
-                                transform: `translateX(${xOffset}px) rotate(${rotation}deg)`,
-                                zIndex: cardIndex,
-                              }}
-                            >
-                              <Card card="Ah" faceDown={true} size={is321 ? "sm" : "md"} />
+                            <div className="flex gap-0.5 sm:gap-1">
+                              {myHoleCards
+                                .filter((card) => card != null)
+                                .map((card, index) => (
+                                  <div
+                                    key={index}
+                                    className="transition-opacity hover:opacity-60"
+                                  >
+                                    <Card
+                                      card={card}
+                                      size={is321 ? "sm" : "md"}
+                                    />
+                                  </div>
+                                ))}
                             </div>
                           );
-                        })}
-                      </div>
-                    );
-                  })()}
+                        })()
+                      : (() => {
+                          // Other players: check for visible cards at showdown
+                          const visibleCards =
+                            visiblePlayerCards?.[player.seat_number.toString()];
+                          const isShowdown =
+                            phase === "showdown" || phase === "complete";
+
+                          // 321 mode at showdown: show grouped cards
+                          if (
+                            is321 &&
+                            isShowdown &&
+                            visibleCards &&
+                            visibleCards.length === 6
+                          ) {
+                            const { group3, group2, group1 } = getGroupedCards(
+                              visibleCards,
+                              player.seat_number,
+                            );
+                            return (
+                              <div className="flex gap-2 sm:gap-3">
+                                <div className="flex gap-0.5 sm:gap-1">
+                                  {group3.map((card, idx) => (
+                                    <Card key={idx} card={card} size="sm" />
+                                  ))}
+                                </div>
+                                <div className="flex gap-0.5 sm:gap-1">
+                                  {group2.map((card, idx) => (
+                                    <Card key={idx} card={card} size="sm" />
+                                  ))}
+                                </div>
+                                <div className="flex gap-0.5 sm:gap-1">
+                                  {group1.map((card, idx) => (
+                                    <Card key={idx} card={card} size="sm" />
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          // Default: fanned out face-down cards
+                          return (
+                            <div
+                              className="relative flex items-center justify-center"
+                              style={{
+                                width: isMobile
+                                  ? "clamp(64px, 24vw, 96px)"
+                                  : "clamp(96px, 18vw, 120px)",
+                                height: isMobile ? "52px" : "64px",
+                              }}
+                            >
+                              {Array.from(
+                                { length: holeCardCount },
+                                (_, cardIndex) => {
+                                  const centerOffset = (holeCardCount - 1) / 2;
+                                  const rotation =
+                                    (cardIndex - centerOffset) *
+                                    holeCardRotationStep;
+                                  const xOffset =
+                                    (cardIndex - centerOffset) * holeCardSpread;
+
+                                  return (
+                                    <div
+                                      key={cardIndex}
+                                      className="absolute"
+                                      style={{
+                                        transform: `translateX(${xOffset}px) rotate(${rotation}deg)`,
+                                        zIndex: cardIndex,
+                                      }}
+                                    >
+                                      <Card
+                                        card="Ah"
+                                        faceDown={true}
+                                        size={is321 ? "sm" : "md"}
+                                      />
+                                    </div>
+                                  );
+                                },
+                              )}
+                            </div>
+                          );
+                        })()}
                 </div>
               )}
 

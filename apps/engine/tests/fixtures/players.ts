@@ -16,6 +16,7 @@ export function createPlayer(overrides: Partial<RoomPlayer> = {}): RoomPlayer {
     is_all_in: false,
     is_sitting_out: false,
     is_spectating: false,
+    waiting_for_next_hand: false,
     connected_at: null,
     last_action_at: null,
     ...overrides,
