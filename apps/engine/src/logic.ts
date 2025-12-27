@@ -233,6 +233,7 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
   const isHoldem = room.game_mode === "texas_holdem";
   const isIndianPoker = room.game_mode === "indian_poker";
   const is321 = room.game_mode === "game_mode_321";
+  const isHoldemFlip = room.game_mode === "holdem_flip";
 
   let cardsPerPlayer: number;
   let totalBoardCards: number;
@@ -243,7 +244,7 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
   } else if (isIndianPoker) {
     cardsPerPlayer = 1;
     totalBoardCards = 0; // No boards for Indian Poker
-  } else if (isHoldem) {
+  } else if (isHoldem || isHoldemFlip) {
     cardsPerPlayer = 2;
     totalBoardCards = 5;
   } else {
@@ -321,7 +322,7 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
           );
     currentActor = seatsToAct[0] ?? null;
   } else {
-    // Post antes for PLO/Indian Poker bomb pots: big blind value is the ante
+    // Post antes for PLO/Indian Poker/Holdem Flip bomb pots: big blind value is the ante
     const ante = room.big_blind;
     updatedPlayers = activePlayers.map((p) => {
       const antePaid = Math.min(p.chip_stack, ante);
@@ -362,11 +363,17 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
         board2: string[];
         board3?: string[];
         visible_player_cards?: Record<string, string[]>;
+        all_player_cards?: Record<number, string[]>;
+        flipped_community_cards?: number[];
+        flipped_player_cards?: Record<number, number[]>;
       }
     | {
         board1: string[];
         board2: string[];
         visible_player_cards?: Record<string, string[]>;
+        all_player_cards?: Record<number, string[]>;
+        flipped_community_cards?: number[];
+        flipped_player_cards?: Record<number, number[]>;
       };
   if (isIndianPoker) {
     initialBoardState = {
@@ -374,6 +381,19 @@ export function dealHand(room: Room, players: RoomPlayer[]): DealResult {
       board2: [],
       visible_player_cards: getVisibleCardsForActivePlayers(playerHands),
     }; // Indian Poker: all cards visible during active play, frontend filters own card
+  } else if (isHoldemFlip) {
+    // Holdem Flip: All cards transmitted to clients but shown face down initially
+    const allPlayerCards: Record<number, string[]> = {};
+    playerHands.forEach((hand) => {
+      allPlayerCards[hand.seat_number] = hand.cards;
+    });
+    initialBoardState = {
+      board1, // All 5 community cards
+      board2: [],
+      all_player_cards: allPlayerCards,
+      flipped_community_cards: [],
+      flipped_player_cards: {},
+    };
   } else if (isHoldem) {
     initialBoardState = { board1: [], board2: [] }; // No cards shown preflop
   } else if (is321) {

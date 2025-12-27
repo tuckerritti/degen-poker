@@ -119,6 +119,13 @@ const actionSchema = z.object({
   idempotencyKey: z.string().optional(),
 });
 
+const flipCardSchema = z.object({
+  playerSeatNumber: z.number().int(),
+  cardType: z.enum(["community", "player"]),
+  cardIndex: z.number().int().min(0).max(4),
+  targetSeatNumber: z.number().int().optional(),
+});
+
 const partitionSchema = z.object({
   seatNumber: z.number().int(),
   threeBoardCards: z.array(z.string()).length(3),
@@ -850,6 +857,229 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     logger.error({ err }, "failed to process action");
+    res.status(500).json({ error: message });
+  }
+});
+
+/**
+ * Flip a card in holdem_flip mode.
+ * Players take turns flipping community cards or other players' hole cards.
+ */
+app.post("/rooms/:roomId/flip-card", async (req: Request, res: Response) => {
+  const roomId = req.params.roomId;
+  const parseResult = flipCardSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    return res.status(400).json({ error: parseResult.error.message });
+  }
+  const payload = parseResult.data;
+
+  try {
+    const room = await fetchRoom(roomId);
+    if (!room) return res.status(404).json({ error: "Room not found" });
+    if (room.game_mode !== "holdem_flip") {
+      return res
+        .status(400)
+        .json({ error: "Card flipping is only for holdem_flip mode" });
+    }
+
+    const gameState = await fetchLatestGameState(roomId);
+    if (!gameState) return res.status(400).json({ error: "No active hand" });
+    if (gameState.phase !== "flop") {
+      return res
+        .status(400)
+        .json({ error: `Cannot flip cards in phase ${gameState.phase}` });
+    }
+    if (gameState.hand_completed_at) {
+      return res.status(409).json({ error: "Hand already completed" });
+    }
+
+    // Validate it's the player's turn
+    if (gameState.current_actor_seat !== payload.playerSeatNumber) {
+      return res.status(400).json({ error: "Not your turn to flip" });
+    }
+
+    const players = await fetchPlayers(roomId);
+    const boardState = (gameState.board_state as unknown as {
+      board1?: string[];
+      all_player_cards?: Record<number, string[]>;
+      flipped_community_cards?: number[];
+      flipped_player_cards?: Record<number, number[]>;
+    }) || {};
+
+    const flippedCommunityCards = boardState.flipped_community_cards || [];
+    const flippedPlayerCards = boardState.flipped_player_cards || {};
+    const allPlayerCards = boardState.all_player_cards || {};
+
+    // Validate the flip
+    if (payload.cardType === "community") {
+      if (payload.cardIndex > 4) {
+        return res.status(400).json({ error: "Invalid community card index" });
+      }
+      if (flippedCommunityCards.includes(payload.cardIndex)) {
+        return res.status(400).json({ error: "Card already flipped" });
+      }
+    } else {
+      // player card
+      if (!payload.targetSeatNumber) {
+        return res.status(400).json({ error: "targetSeatNumber required for player cards" });
+      }
+      if (payload.cardIndex > 1) {
+        return res.status(400).json({ error: "Invalid player card index (0-1)" });
+      }
+      const targetFlipped = flippedPlayerCards[payload.targetSeatNumber] || [];
+      if (targetFlipped.includes(payload.cardIndex)) {
+        return res.status(400).json({ error: "Card already flipped" });
+      }
+    }
+
+    // Update flipped cards
+    const newFlippedCommunityCards = [...flippedCommunityCards];
+    const newFlippedPlayerCards = { ...flippedPlayerCards };
+
+    if (payload.cardType === "community") {
+      newFlippedCommunityCards.push(payload.cardIndex);
+    } else {
+      const targetSeat = payload.targetSeatNumber!;
+      newFlippedPlayerCards[targetSeat] = [
+        ...(newFlippedPlayerCards[targetSeat] || []),
+        payload.cardIndex,
+      ];
+    }
+
+    // Check if all cards are flipped
+    const activePlayers = players.filter(
+      (p) =>
+        !p.is_spectating &&
+        !p.is_sitting_out &&
+        !p.waiting_for_next_hand &&
+        !p.has_folded,
+    );
+    const allCommunityFlipped = newFlippedCommunityCards.length === 5;
+    const allPlayerCardsFlipped = activePlayers.every((p) => {
+      const flipped = newFlippedPlayerCards[p.seat_number] || [];
+      return flipped.length === 2;
+    });
+
+    // Advance turn to next player
+    const order = activePlayers.map((p) => p.seat_number).sort((a, b) => a - b);
+    const currentIndex = order.indexOf(payload.playerSeatNumber);
+    const nextIndex = (currentIndex + 1) % order.length;
+    const nextPlayerSeat = order[nextIndex];
+
+    if (allCommunityFlipped && allPlayerCardsFlipped) {
+      // All cards flipped - determine winners and complete hand
+      const board1 = boardState.board1 || [];
+      const activeHands = activePlayers.map((p) => ({
+        seatNumber: p.seat_number,
+        cards: allPlayerCards[p.seat_number] || [],
+      }));
+
+      const winners = determineSingleBoardWinners(activeHands, board1);
+      const sidePots = calculateSidePots(players);
+      const payouts = endOfHandPayout(sidePots, winners, []);
+
+      // Update player chip stacks
+      const updatedPlayers = players.map((p) => {
+        const payout = payouts.find((pay) => pay.seat === p.seat_number);
+        if (payout) {
+          return {
+            ...p,
+            chip_stack: p.chip_stack + payout.amount,
+            total_invested_this_hand: 0,
+            current_bet: 0,
+          };
+        }
+        return {
+          ...p,
+          total_invested_this_hand: 0,
+          current_bet: 0,
+        };
+      });
+
+      for (const p of updatedPlayers) {
+        await supabase
+          .from("room_players")
+          .update({
+            chip_stack: p.chip_stack,
+            total_invested_this_hand: p.total_invested_this_hand,
+            current_bet: p.current_bet,
+          })
+          .eq("id", p.id);
+      }
+
+      // Update game state to showdown
+      const newBoardState = {
+        ...boardState,
+        flipped_community_cards: newFlippedCommunityCards,
+        flipped_player_cards: newFlippedPlayerCards,
+      };
+
+      await supabase
+        .from("game_states")
+        .update({
+          phase: "showdown",
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          board_state: newBoardState as unknown as any,
+          current_actor_seat: null,
+          hand_completed_at: new Date().toISOString(),
+        })
+        .eq("id", gameState.id);
+
+      // Write hand_results
+      await supabase.from("hand_results").insert({
+        room_id: roomId,
+        game_state_id: gameState.id,
+        hand_number: gameState.hand_number,
+        pot_size: gameState.pot_size,
+        board_a: board1,
+        board_b: null,
+        board_c: null,
+        winners: winners,
+        board1_winners: winners,
+        board2_winners: null,
+        board3_winners: null,
+        action_history: gameState.action_history,
+        shown_hands: null,
+      });
+
+      return res.json({ success: true, phase: "showdown", winners });
+    } else {
+      // Not done yet - update board state and advance turn
+      const newBoardState = {
+        ...boardState,
+        flipped_community_cards: newFlippedCommunityCards,
+        flipped_player_cards: newFlippedPlayerCards,
+      };
+
+      await supabase
+        .from("game_states")
+        .update({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          board_state: newBoardState as unknown as any,
+          current_actor_seat: nextPlayerSeat,
+        })
+        .eq("id", gameState.id);
+
+      // Record the flip action
+      await supabase.from("player_actions").insert({
+        game_state_id: gameState.id,
+        room_id: roomId,
+        seat_number: payload.playerSeatNumber,
+        action_type: "flip_card" as ActionType,
+        amount: payload.cardType === "community" ? payload.cardIndex : payload.targetSeatNumber,
+        timestamp: new Date().toISOString(),
+      });
+
+      return res.json({
+        success: true,
+        nextPlayerSeat,
+        flippedCommunityCards: newFlippedCommunityCards,
+        flippedPlayerCards: newFlippedPlayerCards,
+      });
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    logger.error({ err }, "failed to flip card");
     res.status(500).json({ error: message });
   }
 });

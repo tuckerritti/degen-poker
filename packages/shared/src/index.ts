@@ -14,6 +14,7 @@ export const ACTION_TYPES = [
   "bet",
   "raise",
   "all_in",
+  "flip_card",
 ] as const;
 export type ActionType = (typeof ACTION_TYPES)[number];
 
@@ -35,6 +36,7 @@ export const GAME_MODES = [
   "texas_holdem",
   "indian_poker",
   "game_mode_321",
+  "holdem_flip",
 ] as const;
 export type GameMode = (typeof GAME_MODES)[number];
 
@@ -101,4 +103,8 @@ export interface BoardState {
       oneBoardCard: string[];
     }
   >;
+  // For holdem_flip mode:
+  all_player_cards?: Record<number, string[]>; // seat_number -> [card1, card2]
+  flipped_community_cards?: number[]; // indices 0-4
+  flipped_player_cards?: Record<number, number[]>; // seat_number -> [0, 1] for flipped card indices
 }

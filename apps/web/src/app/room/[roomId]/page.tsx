@@ -482,6 +482,49 @@ export default function RoomPage({
     }
   };
 
+  const handleFlipCard = async ({
+    cardType,
+    cardIndex,
+    targetSeatNumber,
+  }: {
+    cardType: "community" | "player";
+    cardIndex: number;
+    targetSeatNumber?: number;
+  }) => {
+    if (!myPlayer) return;
+
+    if (!safeEngineUrl()) {
+      alert("Engine URL not configured");
+      return;
+    }
+
+    try {
+      const response = await engineFetch(
+        `/rooms/${roomId}/flip-card`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            playerSeatNumber: myPlayer.seat_number,
+            cardType,
+            cardIndex,
+            targetSeatNumber,
+          }),
+        },
+        accessToken,
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(data.error || "Failed to flip card");
+      }
+    } catch (error) {
+      console.error("Error flipping card:", error);
+      alert("Failed to flip card");
+    }
+  };
+
   const copyRoomLink = () => {
     navigator.clipboard.writeText(window.location.href);
     alert("Room link copied to clipboard!");
@@ -626,6 +669,10 @@ export default function RoomPage({
         >,
         reconstructedCards: null as Record<string, string[]> | null,
         hasBoardState: false,
+        // Holdem Flip fields
+        allPlayerCards: {} as Record<number, string[]>,
+        flippedCommunityCards: [] as number[],
+        flippedPlayerCards: {} as Record<number, number[]>,
       };
     }
 
@@ -699,6 +746,10 @@ export default function RoomPage({
       playerPartitions,
       reconstructedCards,
       hasBoardState: true,
+      // Holdem Flip fields
+      allPlayerCards: boardState.all_player_cards || {},
+      flippedCommunityCards: boardState.flipped_community_cards || [],
+      flippedPlayerCards: boardState.flipped_player_cards || {},
     };
   }, [gameState?.board_state]);
 
@@ -710,6 +761,9 @@ export default function RoomPage({
     playerPartitions,
     reconstructedCards,
     hasBoardState,
+    allPlayerCards,
+    flippedCommunityCards,
+    flippedPlayerCards,
   } = boardStateData;
 
   useEffect(() => {
@@ -987,6 +1041,12 @@ export default function RoomPage({
             board2Winners={isShowdownPhase ? board2Winners : null}
             board3Winners={isShowdownPhase ? board3Winners : null}
             onSeatClick={handleSeatClick}
+            allPlayerCards={allPlayerCards}
+            flippedCommunityCards={flippedCommunityCards}
+            flippedPlayerCards={flippedPlayerCards}
+            currentPlayerSeatNumber={gameState?.current_actor_seat ?? null}
+            myPlayerInfo={myPlayer}
+            onFlipCard={handleFlipCard}
           />
         </div>
       </div>
