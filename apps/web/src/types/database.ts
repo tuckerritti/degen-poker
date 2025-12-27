@@ -17,7 +17,7 @@ export type HandResult = Tables<"hand_results">;
 
 // Custom types for JSON fields and application logic
 
-// Board state structure (extended for 321 mode)
+// Board state structure (extended for 321 mode and holdem_flip)
 export interface BoardState {
   board1?: string[]; // e.g., ["Ah", "Kh", "7d", "4c", "2s"]
   board2?: string[]; // e.g., ["2s", "9c", "Qd", "Jh", "3d"]
@@ -39,6 +39,10 @@ export interface BoardState {
       one_board_card: string[];
     }
   >; // For 321 mode showdown: revealed partitions from all players
+  // For holdem_flip mode:
+  all_player_cards?: Record<number, string[]>; // seat_number -> [card1, card2]
+  flipped_community_cards?: number[]; // indices 0-4 of which community cards are flipped
+  flipped_player_cards?: Record<number, number[]>; // seat_number -> [0, 1] for flipped card indices
 }
 
 export interface SidePot {

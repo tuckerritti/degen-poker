@@ -32,6 +32,17 @@ interface PokerTableProps {
   board2Winners?: number[] | null;
   board3Winners?: number[] | null;
   onSeatClick: (seatNumber: number) => void;
+  // Holdem Flip props
+  allPlayerCards?: Record<number, string[]>;
+  flippedCommunityCards?: number[];
+  flippedPlayerCards?: Record<number, number[]>;
+  currentPlayerSeatNumber?: number | null;
+  myPlayerInfo?: { seat_number: number } | null;
+  onFlipCard?: (params: {
+    cardType: "community" | "player";
+    cardIndex: number;
+    targetSeatNumber?: number;
+  }) => void;
 }
 
 export function PokerTable({
@@ -56,6 +67,12 @@ export function PokerTable({
   board1Winners = null,
   board2Winners = null,
   board3Winners = null,
+  allPlayerCards: _allPlayerCards = {},
+  flippedCommunityCards = [],
+  flippedPlayerCards: _flippedPlayerCards = {},
+  currentPlayerSeatNumber,
+  myPlayerInfo,
+  onFlipCard,
 }: PokerTableProps) {
   // Detect mobile viewport without triggering hydration mismatch
   const subscribeToMobile = useCallback((callback: () => void) => {
@@ -777,6 +794,10 @@ export function PokerTable({
               phase={phase}
               myHoleCards={myHoleCards}
               gameMode={gameMode}
+              flippedCommunityCards={flippedCommunityCards}
+              currentPlayerSeatNumber={currentPlayerSeatNumber}
+              myPlayer={myPlayerInfo ?? undefined}
+              onFlipCard={onFlipCard}
             />
             {showdownProgress !== null && (
               <div className="w-full flex justify-center">

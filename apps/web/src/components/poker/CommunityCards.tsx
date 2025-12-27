@@ -11,6 +11,14 @@ interface CommunityCardsProps {
   phase: string;
   myHoleCards?: string[];
   gameMode?: string;
+  flippedCommunityCards?: number[];
+  currentPlayerSeatNumber?: number | null;
+  myPlayer?: { seat_number: number };
+  onFlipCard?: (params: {
+    cardType: "community" | "player";
+    cardIndex: number;
+    targetSeatNumber?: number;
+  }) => void;
 }
 
 export function CommunityCards({
@@ -19,10 +27,17 @@ export function CommunityCards({
   boardC = [],
   myHoleCards,
   gameMode,
+  flippedCommunityCards = [],
+  currentPlayerSeatNumber,
+  myPlayer,
+  onFlipCard,
 }: CommunityCardsProps) {
   const isPLO = myHoleCards && myHoleCards.length === 4;
   const isHoldem = myHoleCards && myHoleCards.length === 2;
   const is321 = gameMode === "game_mode_321";
+  const isHoldemFlip = gameMode === "holdem_flip";
+  const isMyTurn =
+    myPlayer && currentPlayerSeatNumber === myPlayer.seat_number;
 
   return (
     <div
@@ -43,13 +58,33 @@ export function CommunityCards({
           <div className="flex flex-wrap justify-center gap-0.5 sm:gap-1 rounded-lg glass border border-whiskey-gold/30 p-1.5 sm:p-2 shadow-lg">
             {boardA
               .filter((card) => card != null)
-              .map((card, index) => (
-                <Card
-                  key={`a-${index}`}
-                  card={card}
-                  size={is321 ? "sm" : "md"}
-                />
-              ))}
+              .map((card, index) => {
+                const isFaceDown =
+                  isHoldemFlip && !flippedCommunityCards.includes(index);
+                const isClickable = isHoldemFlip && isFaceDown && isMyTurn;
+
+                return (
+                  <div
+                    key={`a-${index}`}
+                    onClick={
+                      isClickable && onFlipCard
+                        ? () =>
+                            onFlipCard({
+                              cardType: "community",
+                              cardIndex: index,
+                            })
+                        : undefined
+                    }
+                    className={isClickable ? "cursor-pointer" : undefined}
+                  >
+                    <Card
+                      card={card}
+                      size={is321 ? "sm" : "md"}
+                      faceDown={isFaceDown}
+                    />
+                  </div>
+                );
+              })}
           </div>
           {is321 && (
             <span className="text-sm text-cigar-ash/50 font-mono">3</span>
