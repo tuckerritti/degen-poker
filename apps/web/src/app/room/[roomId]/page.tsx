@@ -5,6 +5,7 @@ import { useSession } from "@/lib/hooks/useSession";
 import { useRoomPlayers } from "@/lib/hooks/useRoomPlayers";
 import { useGameState } from "@/lib/hooks/useGameState";
 import { usePlayerHand } from "@/lib/hooks/usePlayerHand";
+import { useLatestHandResult } from "@/lib/hooks/useLatestHandResult";
 import { getBrowserClient } from "@/lib/supabase/client";
 import { ActionPanel } from "@/components/poker/ActionPanel";
 import { PokerTable } from "@/components/poker/PokerTable";
@@ -27,6 +28,7 @@ export default function RoomPage({
   } = useRoomPlayers(roomId);
   const { gameState } = useGameState(roomId);
   const { playerHand } = usePlayerHand(roomId, sessionId);
+  const { handResult } = useLatestHandResult(roomId);
 
   const [room, setRoom] = useState<Room | null>(null);
   const [roomLoading, setRoomLoading] = useState(true);
@@ -794,6 +796,10 @@ export default function RoomPage({
   const isShowdownPhase =
     gameState?.phase === "showdown" || gameState?.phase === "complete";
 
+  const board1Winners = handResult?.board1_winners as unknown as number[] | null;
+  const board2Winners = handResult?.board2_winners as unknown as number[] | null;
+  const board3Winners = handResult?.board3_winners as unknown as number[] | null;
+
   const stakesLabel = room
     ? `Bomb pot ante (BB): ${room.big_blind}`
     : "Loading stakes...";
@@ -915,6 +921,9 @@ export default function RoomPage({
             playerPartitions={playerPartitionsForDisplay}
             showdownProgress={isShowdownPhase ? showdownProgress : null}
             showdownTransitionMs={isShowdownPhase ? showdownTransitionMs : 0}
+            board1Winners={isShowdownPhase ? board1Winners : null}
+            board2Winners={isShowdownPhase ? board2Winners : null}
+            board3Winners={isShowdownPhase ? board3Winners : null}
             onSeatClick={handleSeatClick}
           />
         </div>

@@ -139,6 +139,9 @@ export type Database = {
           board_a: string[] | null;
           board_b: string[] | null;
           board_c: string[] | null;
+          board1_winners: Json | null;
+          board2_winners: Json | null;
+          board3_winners: Json | null;
           created_at: string;
           final_pot: number;
           hand_number: number;
@@ -152,6 +155,9 @@ export type Database = {
           board_a?: string[] | null;
           board_b?: string[] | null;
           board_c?: string[] | null;
+          board1_winners?: Json | null;
+          board2_winners?: Json | null;
+          board3_winners?: Json | null;
           created_at?: string;
           final_pot: number;
           hand_number: number;
@@ -165,6 +171,9 @@ export type Database = {
           board_a?: string[] | null;
           board_b?: string[] | null;
           board_c?: string[] | null;
+          board1_winners?: Json | null;
+          board2_winners?: Json | null;
+          board3_winners?: Json | null;
           created_at?: string;
           final_pot?: number;
           hand_number?: number;

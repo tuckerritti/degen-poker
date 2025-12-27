@@ -28,6 +28,9 @@ interface PokerTableProps {
   >;
   showdownProgress?: number | null;
   showdownTransitionMs?: number;
+  board1Winners?: number[] | null;
+  board2Winners?: number[] | null;
+  board3Winners?: number[] | null;
   onSeatClick: (seatNumber: number) => void;
 }
 
@@ -50,6 +53,9 @@ export function PokerTable({
   onSeatClick,
   showdownProgress = null,
   showdownTransitionMs = 0,
+  board1Winners = null,
+  board2Winners = null,
+  board3Winners = null,
 }: PokerTableProps) {
   // Detect mobile viewport without triggering hydration mismatch
   const subscribeToMobile = useCallback((callback: () => void) => {
@@ -261,6 +267,28 @@ export function PokerTable({
       : base;
   };
 
+  // Helper function to determine winner status for a seat
+  const getWinnerStatus = (seatNumber: number) => {
+    const wonBoards: string[] = [];
+
+    if (board1Winners?.includes(seatNumber)) wonBoards.push("1");
+    if (board2Winners?.includes(seatNumber)) wonBoards.push("2");
+    if (board3Winners?.includes(seatNumber)) wonBoards.push("3");
+
+    const isWinner = wonBoards.length > 0;
+
+    let displayText = "";
+    if (wonBoards.length === 1) {
+      displayText = `Board ${wonBoards[0]}`;
+    } else if (wonBoards.length === 2) {
+      displayText = `Board ${wonBoards[0]} & ${wonBoards[1]}`;
+    } else if (wonBoards.length === 3) {
+      displayText = `Board ${wonBoards.join(", ")}`;
+    }
+
+    return { isWinner, wonBoards, displayText };
+  };
+
   return (
     <div
       className="relative mx-auto aspect-[3/5] sm:aspect-[4/3] w-full overflow-visible"
@@ -388,6 +416,12 @@ export function PokerTable({
             ? "z-50"
             : "z-10";
 
+        // Winner/loser status for showdown phase
+        const winnerStatus = isShowdownPhase && !isEmpty
+          ? getWinnerStatus(seatNumber)
+          : null;
+        const isLoser = isShowdownPhase && !isEmpty && !player.has_folded && !winnerStatus?.isWinner;
+
         if (shouldHideEmptySeats && isEmpty) {
           return null;
         }
@@ -412,9 +446,13 @@ export function PokerTable({
                   ? "border-white/20 bg-black/40 hover:border-whiskey-gold/50 hover:bg-black/50"
                   : isEmpty && userHasSeat
                     ? "border-white/20 bg-black/40"
-                    : isMyPlayer
-                      ? "border-whiskey-gold bg-whiskey-gold/20"
-                      : "border-white/20 bg-black/40"
+                    : winnerStatus?.isWinner
+                      ? "border-green-500/30 bg-green-900/25"
+                      : isLoser
+                        ? "border-red-500/30 bg-red-900/25"
+                        : isMyPlayer
+                          ? "border-whiskey-gold bg-whiskey-gold/20"
+                          : "border-white/20 bg-black/40"
               } ${
                 isCurrentActor
                   ? "ring-2 sm:ring-4 ring-whiskey-gold ring-offset-1 sm:ring-offset-2 ring-offset-royal-blue glow-gold"
@@ -439,10 +477,18 @@ export function PokerTable({
                     {player.display_name}
                   </div>
                   <div
-                    className="mt-0.5 text-sm sm:text-base font-bold text-whiskey-gold"
-                    style={{ fontFamily: "Roboto Mono, monospace" }}
+                    className="mt-0.5 text-xs sm:text-sm font-bold"
+                    style={{ fontFamily: "Lato, sans-serif" }}
                   >
-                    ${player.chip_stack}
+                    {winnerStatus?.isWinner ? (
+                      <span className="text-green-400">{winnerStatus.displayText}</span>
+                    ) : isShowdownPhase && !player.has_folded ? (
+                      <span className="text-red-400">Lost</span>
+                    ) : (
+                      <span className="text-whiskey-gold" style={{ fontFamily: "Roboto Mono, monospace" }}>
+                        ${player.chip_stack}
+                      </span>
+                    )}
                   </div>
                   {player.has_folded && (
                     <div className="text-xs font-semibold text-velvet-red">
