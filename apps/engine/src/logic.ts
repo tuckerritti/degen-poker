@@ -19,6 +19,72 @@ export interface DealResult {
   usesTwoDecks: boolean; // Indicates if two decks were used
 }
 
+export interface LeaveResult {
+  removedImmediately: boolean;
+  autoFolded: boolean;
+  sessionArchive: {
+    total_buy_in: number;
+    final_chip_stack: number;
+    net_profit_loss: number;
+    hands_played: number;
+  };
+  newOwner?: {
+    auth_user_id: string;
+    display_name: string;
+    seat_number: number;
+  };
+}
+
+export function selectNewOwner(
+  players: RoomPlayer[],
+): LeaveResult["newOwner"] | undefined {
+  const eligible = players
+    .filter((p) => !p.is_spectating && p.auth_user_id)
+    .sort((a, b) => a.seat_number - b.seat_number);
+
+  const next = eligible[0];
+  if (!next?.auth_user_id) return undefined;
+  return {
+    auth_user_id: next.auth_user_id,
+    display_name: next.display_name,
+    seat_number: next.seat_number,
+  };
+}
+
+export function processLeaveRequest(params: {
+  room: Room;
+  player: RoomPlayer;
+  players: RoomPlayer[];
+  gameState: GameStateRow | null;
+  handsPlayed: number;
+}): LeaveResult {
+  const { room, player, players, gameState, handsPlayed } = params;
+  const removedImmediately = !gameState;
+  const autoFolded = Boolean(gameState && !player.has_folded);
+  const sessionArchive = {
+    total_buy_in: player.total_buy_in,
+    final_chip_stack: player.chip_stack,
+    net_profit_loss: player.chip_stack - player.total_buy_in,
+    hands_played: handsPlayed,
+  };
+
+  const shouldTransferOwner =
+    Boolean(room.owner_auth_user_id) &&
+    Boolean(player.auth_user_id) &&
+    room.owner_auth_user_id === player.auth_user_id;
+
+  const newOwner = shouldTransferOwner
+    ? selectNewOwner(players.filter((p) => p.id !== player.id))
+    : undefined;
+
+  return {
+    removedImmediately,
+    autoFolded,
+    sessionArchive,
+    newOwner,
+  };
+}
+
 export function nextButtonSeat(
   players: RoomPlayer[],
   currentButton: number | null,
