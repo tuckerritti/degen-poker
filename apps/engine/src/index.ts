@@ -14,6 +14,7 @@ import {
   determine321Winners,
   calculateSidePots,
   endOfHandPayout321,
+  processLeaveRequest,
 } from "./logic.js";
 import type { GameStateRow, Room, RoomPlayer, SidePot } from "./types.js";
 import { ActionType } from "@poker/shared";
@@ -99,6 +100,10 @@ const joinRoomSchema = z.object({
   seatNumber: z.number().int().min(0),
   displayName: z.string().min(1),
   buyIn: z.number().int().positive(),
+});
+
+const leaveRoomSchema = z.object({
+  seatNumber: z.number().int(),
 });
 
 const startHandSchema = z.object({});
@@ -285,6 +290,232 @@ app.post("/rooms/:roomId/join", async (req: Request, res: Response) => {
     const message = err instanceof Error ? err.message : "Unknown error";
     logger.error({ err }, "failed to join room");
     res.status(400).json({ error: message });
+  }
+});
+
+app.post("/rooms/:roomId/leave", async (req: Request, res: Response) => {
+  const roomId = req.params.roomId;
+  const payloadResult = leaveRoomSchema.safeParse(req.body);
+  if (!payloadResult.success) {
+    return res.status(400).json({ error: payloadResult.error.message });
+  }
+  const payload = payloadResult.data;
+
+  try {
+    const userId = await requireUser(req, res);
+    if (!userId) return;
+
+    const room = await fetchRoom(roomId);
+    if (!room) return res.status(404).json({ error: "Room not found" });
+
+    const players = await fetchPlayers(roomId);
+    const player = players.find((p) => p.seat_number === payload.seatNumber);
+    if (!player) return res.status(404).json({ error: "Seat not found" });
+
+    if (player.auth_user_id && player.auth_user_id !== userId) {
+      return res
+        .status(403)
+        .json({ error: "You are not authorized to leave this seat" });
+    }
+
+    if (!player.auth_user_id) {
+      const { error: claimErr } = await supabase
+        .from("room_players")
+        .update({ auth_user_id: userId })
+        .eq("id", player.id);
+      if (claimErr) throw claimErr;
+      player.auth_user_id = userId;
+    }
+
+    const gameState = await fetchLatestGameState(roomId);
+    const handsPlayed = gameState
+      ? 0
+      : await countHandsPlayed(roomId, payload.seatNumber);
+    const leaveResult = processLeaveRequest({
+      room: room as Room,
+      player: player as RoomPlayer,
+      players: players as RoomPlayer[],
+      gameState: gameState as GameStateRow | null,
+      handsPlayed,
+    });
+
+    if (
+      room.owner_auth_user_id &&
+      player.auth_user_id &&
+      room.owner_auth_user_id === player.auth_user_id
+    ) {
+      const { error: ownerErr } = await supabase
+        .from("rooms")
+        .update({
+          owner_auth_user_id: leaveResult.newOwner?.auth_user_id ?? null,
+          last_activity_at: new Date().toISOString(),
+        })
+        .eq("id", roomId);
+      if (ownerErr) throw ownerErr;
+    }
+
+    if (!gameState) {
+      const leftAt = new Date().toISOString();
+      await insertPlayerSession({
+        roomId,
+        player: player as RoomPlayer,
+        handsPlayed,
+        leftAt,
+        leftDuringHand: false,
+      });
+
+      const { error: deleteErr } = await supabase
+        .from("room_players")
+        .delete()
+        .eq("id", player.id);
+      if (deleteErr) throw deleteErr;
+
+      return res.json({
+        removedImmediately: true,
+        session: leaveResult.sessionArchive,
+        newOwner: leaveResult.newOwner ?? null,
+      });
+    }
+
+    let autoFolded = false;
+    let handCompleted = false;
+    let leaveMarked = false;
+
+    if (!player.has_folded) {
+      const secret = await fetchGameStateSecret(gameState.id);
+      if (!secret) return res.status(500).json({ error: "Missing game secrets" });
+
+      // Fetch player hands for Indian Poker showdown reveal
+      let playerHands: Array<{ seat_number: number; cards: string[] }> | undefined;
+      if (room.game_mode === "indian_poker") {
+        const { data: handsData, error: handsErr } = await supabase
+          .from("player_hands")
+          .select("seat_number, cards")
+          .eq("game_state_id", gameState.id);
+        if (handsErr) throw handsErr;
+        if (handsData) {
+          playerHands = handsData.map((h) => ({
+            seat_number: h.seat_number,
+            cards: h.cards as unknown as string[],
+          }));
+        }
+      }
+
+      // Fetch player partitions for 321 mode showdown reveal
+      let playerPartitions: Array<{
+        seat_number: number;
+        three_board_cards: unknown;
+        two_board_cards: unknown;
+        one_board_card: unknown;
+      }> | undefined;
+      if (room.game_mode === "game_mode_321") {
+        const { data: partitionsData, error: partitionsErr } = await supabase
+          .from("player_partitions")
+          .select("seat_number, three_board_cards, two_board_cards, one_board_card")
+          .eq("game_state_id", gameState.id);
+        if (partitionsErr) {
+          console.error("Failed to fetch partitions:", partitionsErr);
+        } else if (partitionsData) {
+          playerPartitions = partitionsData.map((p) => ({
+            seat_number: p.seat_number,
+            three_board_cards: p.three_board_cards,
+            two_board_cards: p.two_board_cards,
+            one_board_card: p.one_board_card,
+          }));
+        }
+      }
+
+      const outcome = applyAction(
+        {
+          room: room as Room,
+          players: players as RoomPlayer[],
+          gameState: gameState as GameStateRow,
+          fullBoard1: secret.full_board1,
+          fullBoard2: secret.full_board2,
+          fullBoard3: secret.full_board3 ?? undefined,
+          playerHands,
+          playerPartitions,
+        },
+        payload.seatNumber,
+        "fold",
+      );
+
+      await supabase.from("player_actions").insert({
+        room_id: roomId,
+        game_state_id: gameState.id,
+        seat_number: payload.seatNumber,
+        action_type: "fold",
+        amount: null,
+        processed: outcome.error ? false : true,
+        processed_at: outcome.error ? null : new Date().toISOString(),
+        error_message: outcome.error ?? null,
+        auth_user_id: userId,
+      });
+
+      if (outcome.error) {
+        return res.status(400).json({ error: outcome.error });
+      }
+
+      if (outcome.updatedPlayers.length) {
+        const playerMap = new Map<string, Partial<RoomPlayer>>();
+        outcome.updatedPlayers.forEach((updated) => {
+          if (updated.id) playerMap.set(updated.id, updated);
+        });
+        const deduplicatedPlayers = Array.from(playerMap.values());
+
+        const { error: upErr } = await supabase
+          .from("room_players")
+          .upsert(deduplicatedPlayers);
+        if (upErr) throw upErr;
+      }
+
+      const { error: gsErr } = await supabase
+        .from("game_states")
+        .update(outcome.updatedGameState)
+        .eq("id", gameState.id);
+      if (gsErr) throw gsErr;
+
+      const { error: leaveMarkErr } = await supabase
+        .from("room_players")
+        .update({ is_sitting_out: true })
+        .eq("id", player.id);
+      if (leaveMarkErr) throw leaveMarkErr;
+      leaveMarked = true;
+      player.is_sitting_out = true;
+
+      if (outcome.handCompleted) {
+        handCompleted = true;
+        await completeHandAfterAction({
+          roomId,
+          room: room as Room,
+          gameState: gameState as GameStateRow,
+          secret,
+          players: players as RoomPlayer[],
+          outcome,
+        });
+      }
+
+      autoFolded = true;
+    }
+
+    if (!leaveMarked) {
+      const { error: leaveMarkErr } = await supabase
+        .from("room_players")
+        .update({ is_sitting_out: true })
+        .eq("id", player.id);
+      if (leaveMarkErr) throw leaveMarkErr;
+      player.is_sitting_out = true;
+    }
+
+    res.json({
+      removedImmediately: handCompleted,
+      autoFolded,
+      newOwner: leaveResult.newOwner ?? null,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    logger.error({ err }, "failed to leave room");
+    res.status(500).json({ error: message });
   }
 });
 
@@ -654,182 +885,14 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
 
     // If hand completed, write results and payouts
     if (outcome.handCompleted) {
-      // Fetch player hands for showdown evaluation
-      const { data: playerHands, error: handsErr } = await supabase
-        .from("player_hands")
-        .select("seat_number, cards")
-        .eq("game_state_id", gameState.id);
-
-      if (handsErr) throw handsErr;
-
-      // merge updated player snapshots to reflect latest chip/bet state before payouts
-      const mergedPlayers = players.map((p) => {
-        const updated = outcome.updatedPlayers.find((u) => u.id === p.id);
-        return updated ? { ...p, ...updated } : p;
+      await completeHandAfterAction({
+        roomId,
+        room: room as Room,
+        gameState: gameState as GameStateRow,
+        secret,
+        players: players as RoomPlayer[],
+        outcome,
       });
-
-      const activePlayers = mergedPlayers.filter(
-        (p) =>
-          !p.has_folded &&
-          !p.is_spectating &&
-          !p.is_sitting_out &&
-          !p.waiting_for_next_hand,
-      );
-      let payouts: { seat: number; amount: number }[] = [];
-      let board1Winners: number[] = [];
-      let board2Winners: number[] = [];
-
-      if (activePlayers.length === 1) {
-        board1Winners = [activePlayers[0].seat_number];
-        payouts = [
-          {
-            seat: activePlayers[0].seat_number,
-            amount: outcome.potAwarded ?? gameState.pot_size ?? 0,
-          },
-        ];
-      } else {
-        // Determine winners using hand evaluation
-        const board1 = secret.full_board1 || [];
-        const board2 = secret.full_board2 || [];
-        const isHoldem = (room as Room).game_mode === "texas_holdem";
-        const isIndianPoker = (room as Room).game_mode === "indian_poker";
-
-        const activeHands = (playerHands || [])
-          .filter((ph) =>
-            activePlayers.some((p) => p.seat_number === ph.seat_number),
-          )
-          .map((ph) => ({
-            seatNumber: ph.seat_number,
-            cards: ph.cards as unknown as string[],
-          }));
-
-        // Reuse side pots from applyAction outcome instead of recalculating
-        const sidePots =
-          (outcome.updatedGameState.side_pots as SidePot[]) ??
-          calculateSidePots(mergedPlayers);
-
-        if (isIndianPoker) {
-          // Indian Poker: single card high-card comparison
-          const winners = determineIndianPokerWinners(activeHands);
-          board1Winners = winners;
-          payouts = endOfHandPayout(sidePots, winners, []);
-        } else if (isHoldem) {
-          // Texas Hold'em: single board winner determination
-          const winners = determineSingleBoardWinners(activeHands, board1);
-          // For Hold'em, distribute entire pot to winners (not split between boards)
-          board1Winners = winners;
-          payouts = endOfHandPayout(sidePots, winners, []);
-        } else {
-          // PLO: double board winner determination
-          const { board1Winners: ploBoard1, board2Winners: ploBoard2 } =
-            determineDoubleBoardWinners(activeHands, board1, board2);
-          board1Winners = ploBoard1;
-          board2Winners = ploBoard2;
-          payouts = endOfHandPayout(sidePots, ploBoard1, ploBoard2);
-        }
-      }
-
-      if (payouts.length) {
-        const creditUpdates = payouts
-          .map((p) => {
-            const player = mergedPlayers.find(
-              (pl) => pl.seat_number === p.seat,
-            );
-            return player
-              ? {
-                  id: player.id,
-                  room_id: player.room_id,
-                  seat_number: player.seat_number,
-                  auth_user_id: player.auth_user_id,
-                  display_name: player.display_name,
-                  total_buy_in: player.total_buy_in,
-                  chip_stack: (player.chip_stack ?? 0) + p.amount,
-                  waiting_for_next_hand: player.waiting_for_next_hand,
-                }
-              : null;
-          })
-          .filter(Boolean) as Partial<RoomPlayer>[];
-        if (creditUpdates.length) {
-          const { error: creditErr } = await supabase
-            .from("room_players")
-            .upsert(creditUpdates);
-          if (creditErr) throw creditErr;
-        }
-
-        // Auto-pause heads-up games when one player busts
-        const finalPlayers = mergedPlayers.map((p) => {
-          const credit = creditUpdates.find((c) => c.id === p.id);
-          return credit ? { ...p, ...credit } : p;
-        });
-        const activeSeated = finalPlayers.filter(
-          (p) =>
-            !p.is_spectating && !p.is_sitting_out && !p.waiting_for_next_hand,
-        );
-        const withChips = activeSeated.filter((p) => (p.chip_stack ?? 0) > 0);
-        const shouldAutoPause =
-          activeSeated.length === 2 && withChips.length === 1;
-
-        // Pause if: (1) heads-up bust, or (2) pause_after_hand flag is set
-        if (shouldAutoPause || room.pause_after_hand) {
-          const { error: pauseErr } = await supabase
-            .from("rooms")
-            .update({
-              is_paused: true,
-              pause_after_hand: false,
-              last_activity_at: new Date().toISOString(),
-            })
-            .eq("id", roomId);
-          if (pauseErr) throw pauseErr;
-        }
-      }
-      const boardState = (gameState.board_state ?? null) as {
-        board1?: string[];
-        board2?: string[];
-        board3?: string[];
-      } | null;
-
-      const allWinners = payouts.map((p) => p.seat);
-
-      const { error: resultsErr } = await supabase.from("hand_results").insert({
-        room_id: roomId,
-        hand_number: gameState.hand_number,
-        final_pot: outcome.potAwarded ?? gameState.pot_size ?? 0,
-        board_a: boardState?.board1 ?? null,
-        board_b: boardState?.board2 ?? null,
-        board_c: boardState?.board3 ?? null,
-        winners: allWinners,
-        board1_winners: board1Winners,
-        board2_winners: board2Winners.length > 0 ? board2Winners : null,
-        board3_winners: null,
-        action_history:
-          outcome.updatedGameState.action_history ?? gameState.action_history,
-        shown_hands: null,
-      });
-      if (resultsErr) throw resultsErr;
-
-      // Mark hand as completed with timestamp for frontend countdown timer
-      // The cleanup scheduler will delete this game_state after HAND_COMPLETE_DELAY_MS
-      const { error: updateErr } = await supabase
-        .from("game_states")
-        .update({ hand_completed_at: new Date().toISOString() })
-        .eq("id", gameState.id);
-
-      if (updateErr) {
-        logger.error(
-          { err: updateErr },
-          "failed to update game_state with hand_completed_at",
-        );
-        throw updateErr;
-      }
-
-      logger.info(
-        {
-          roomId: room.id,
-          handNumber: gameState.hand_number,
-          completedAt: new Date().toISOString(),
-        },
-        "hand marked as completed, cleanup scheduled",
-      );
     }
 
     // Return response - if hand completed, game state was deleted
@@ -1189,6 +1252,8 @@ app.post("/rooms/:roomId/partitions", async (req: Request, res: Response) => {
       if (pauseErr) throw pauseErr;
     }
 
+    await archiveAndRemoveLeavingPlayers(roomId, completionTime);
+
     res.json({
       ok: true,
       completed: true,
@@ -1238,6 +1303,283 @@ async function fetchLatestGameState(
     .maybeSingle();
   if (error) throw error;
   return data as GameStateRow | null;
+}
+
+async function countHandsPlayed(
+  roomId: string,
+  seatNumber: number,
+): Promise<number> {
+  const { data, error } = await supabase
+    .from("player_actions")
+    .select("game_state_id")
+    .eq("room_id", roomId)
+    .eq("seat_number", seatNumber)
+    .not("game_state_id", "is", null);
+  if (error) throw error;
+
+  const distinct = new Set(
+    (data ?? [])
+      .map((row) => row.game_state_id as string | null)
+      .filter(Boolean),
+  );
+  return distinct.size;
+}
+
+async function insertPlayerSession(params: {
+  roomId: string;
+  player: RoomPlayer;
+  handsPlayed: number;
+  leftAt: string;
+  leftDuringHand: boolean;
+}): Promise<void> {
+  const { roomId, player, handsPlayed, leftAt, leftDuringHand } = params;
+  const { error } = await supabase.from("player_sessions").insert({
+    room_id: roomId,
+    auth_user_id: player.auth_user_id ?? null,
+    display_name: player.display_name,
+    seat_number: player.seat_number,
+    total_buy_in: player.total_buy_in,
+    final_chip_stack: player.chip_stack,
+    net_profit_loss: player.chip_stack - player.total_buy_in,
+    hands_played: handsPlayed,
+    joined_at: player.connected_at ?? new Date().toISOString(),
+    left_at: leftAt,
+    left_during_hand: leftDuringHand,
+  });
+  if (error) throw error;
+}
+
+async function archiveAndRemoveLeavingPlayers(
+  roomId: string,
+  leftAt: string,
+): Promise<void> {
+  const { data: leavingPlayers, error: leaveErr } = await supabase
+    .from("room_players")
+    .select("*")
+    .eq("room_id", roomId)
+    .eq("is_sitting_out", true)
+    .eq("has_folded", true);
+  if (leaveErr) throw leaveErr;
+  if (!leavingPlayers || leavingPlayers.length === 0) return;
+
+  for (const leaving of leavingPlayers as RoomPlayer[]) {
+    const handsPlayed = await countHandsPlayed(roomId, leaving.seat_number);
+    await insertPlayerSession({
+      roomId,
+      player: leaving,
+      handsPlayed,
+      leftAt,
+      leftDuringHand: true,
+    });
+  }
+
+  const leaveIds = leavingPlayers.map((p) => p.id);
+  const { error: deleteErr } = await supabase
+    .from("room_players")
+    .delete()
+    .in("id", leaveIds);
+  if (deleteErr) throw deleteErr;
+}
+
+async function completeHandAfterAction(params: {
+  roomId: string;
+  room: Room;
+  gameState: GameStateRow;
+  secret: {
+    full_board1: string[];
+    full_board2: string[] | null;
+    full_board3: string[] | null;
+  };
+  players: RoomPlayer[];
+  outcome: {
+    updatedPlayers: Partial<RoomPlayer>[];
+    updatedGameState: Partial<GameStateRow>;
+    handCompleted: boolean;
+    potAwarded?: number;
+  };
+}): Promise<void> {
+  const { roomId, room, gameState, secret, players, outcome } = params;
+
+  // Fetch player hands for showdown evaluation
+  const { data: playerHands, error: handsErr } = await supabase
+    .from("player_hands")
+    .select("seat_number, cards")
+    .eq("game_state_id", gameState.id);
+
+  if (handsErr) throw handsErr;
+
+  // merge updated player snapshots to reflect latest chip/bet state before payouts
+  const mergedPlayers = players.map((p) => {
+    const updated = outcome.updatedPlayers.find((u) => u.id === p.id);
+    return updated ? { ...p, ...updated } : p;
+  });
+
+  const activePlayers = mergedPlayers.filter(
+    (p) =>
+      !p.has_folded &&
+      !p.is_spectating &&
+      !p.is_sitting_out &&
+      !p.waiting_for_next_hand,
+  );
+  let payouts: { seat: number; amount: number }[] = [];
+  let board1Winners: number[] = [];
+  let board2Winners: number[] = [];
+
+  if (activePlayers.length === 1) {
+    board1Winners = [activePlayers[0].seat_number];
+    payouts = [
+      {
+        seat: activePlayers[0].seat_number,
+        amount: outcome.potAwarded ?? gameState.pot_size ?? 0,
+      },
+    ];
+  } else {
+    // Determine winners using hand evaluation
+    const board1 = secret.full_board1 || [];
+    const board2 = secret.full_board2 || [];
+    const isHoldem = room.game_mode === "texas_holdem";
+    const isIndianPoker = room.game_mode === "indian_poker";
+
+    const activeHands = (playerHands || [])
+      .filter((ph) =>
+        activePlayers.some((p) => p.seat_number === ph.seat_number),
+      )
+      .map((ph) => ({
+        seatNumber: ph.seat_number,
+        cards: ph.cards as unknown as string[],
+      }));
+
+    // Reuse side pots from applyAction outcome instead of recalculating
+    const sidePots =
+      (outcome.updatedGameState.side_pots as SidePot[]) ??
+      calculateSidePots(mergedPlayers);
+
+    if (isIndianPoker) {
+      // Indian Poker: single card high-card comparison
+      const winners = determineIndianPokerWinners(activeHands);
+      board1Winners = winners;
+      payouts = endOfHandPayout(sidePots, winners, []);
+    } else if (isHoldem) {
+      // Texas Hold'em: single board winner determination
+      const winners = determineSingleBoardWinners(activeHands, board1);
+      // For Hold'em, distribute entire pot to winners (not split between boards)
+      board1Winners = winners;
+      payouts = endOfHandPayout(sidePots, winners, []);
+    } else {
+      // PLO: double board winner determination
+      const {
+        board1Winners: ploBoard1,
+        board2Winners: ploBoard2,
+      } = determineDoubleBoardWinners(activeHands, board1, board2);
+      board1Winners = ploBoard1;
+      board2Winners = ploBoard2;
+      payouts = endOfHandPayout(sidePots, ploBoard1, ploBoard2);
+    }
+  }
+
+  if (payouts.length) {
+    const creditUpdates = payouts
+      .map((p) => {
+        const player = mergedPlayers.find((pl) => pl.seat_number === p.seat);
+        return player
+          ? {
+              id: player.id,
+              room_id: player.room_id,
+              seat_number: player.seat_number,
+              auth_user_id: player.auth_user_id,
+              display_name: player.display_name,
+              total_buy_in: player.total_buy_in,
+              chip_stack: (player.chip_stack ?? 0) + p.amount,
+              waiting_for_next_hand: player.waiting_for_next_hand,
+            }
+          : null;
+      })
+      .filter(Boolean) as Partial<RoomPlayer>[];
+    if (creditUpdates.length) {
+      const { error: creditErr } = await supabase
+        .from("room_players")
+        .upsert(creditUpdates);
+      if (creditErr) throw creditErr;
+    }
+
+    // Auto-pause heads-up games when one player busts
+    const finalPlayers = mergedPlayers.map((p) => {
+      const credit = creditUpdates.find((c) => c.id === p.id);
+      return credit ? { ...p, ...credit } : p;
+    });
+    const activeSeated = finalPlayers.filter(
+      (p) =>
+        !p.is_spectating && !p.is_sitting_out && !p.waiting_for_next_hand,
+    );
+    const withChips = activeSeated.filter((p) => (p.chip_stack ?? 0) > 0);
+    const shouldAutoPause =
+      activeSeated.length === 2 && withChips.length === 1;
+
+    // Pause if: (1) heads-up bust, or (2) pause_after_hand flag is set
+    if (shouldAutoPause || room.pause_after_hand) {
+      const { error: pauseErr } = await supabase
+        .from("rooms")
+        .update({
+          is_paused: true,
+          pause_after_hand: false,
+          last_activity_at: new Date().toISOString(),
+        })
+        .eq("id", roomId);
+      if (pauseErr) throw pauseErr;
+    }
+  }
+
+  const boardState = (gameState.board_state ?? null) as {
+    board1?: string[];
+    board2?: string[];
+    board3?: string[];
+  } | null;
+
+  const allWinners = payouts.map((p) => p.seat);
+
+  const { error: resultsErr } = await supabase.from("hand_results").insert({
+    room_id: roomId,
+    hand_number: gameState.hand_number,
+    final_pot: outcome.potAwarded ?? gameState.pot_size ?? 0,
+    board_a: boardState?.board1 ?? null,
+    board_b: boardState?.board2 ?? null,
+    board_c: boardState?.board3 ?? null,
+    winners: allWinners,
+    board1_winners: board1Winners,
+    board2_winners: board2Winners.length > 0 ? board2Winners : null,
+    board3_winners: null,
+    action_history:
+      outcome.updatedGameState.action_history ?? gameState.action_history,
+    shown_hands: null,
+  });
+  if (resultsErr) throw resultsErr;
+
+  // Mark hand as completed with timestamp for frontend countdown timer
+  // The cleanup scheduler will delete this game_state after HAND_COMPLETE_DELAY_MS
+  const completionTime = new Date().toISOString();
+  const { error: updateErr } = await supabase
+    .from("game_states")
+    .update({ hand_completed_at: completionTime })
+    .eq("id", gameState.id);
+
+  if (updateErr) {
+    logger.error(
+      { err: updateErr },
+      "failed to update game_state with hand_completed_at",
+    );
+    throw updateErr;
+  }
+
+  await archiveAndRemoveLeavingPlayers(roomId, completionTime);
+
+  logger.info(
+    {
+      roomId: room.id,
+      handNumber: gameState.hand_number,
+      completedAt: completionTime,
+    },
+    "hand marked as completed, cleanup scheduled",
+  );
 }
 
 const server = app.listen(port, () => {

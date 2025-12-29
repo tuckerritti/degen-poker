@@ -41,6 +41,9 @@ export default function RoomPage({
   const [rebuyAmount, setRebuyAmount] = useState(100);
   const [isRebuying, setIsRebuying] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
+  const [showLeaveConfirmModal, setShowLeaveConfirmModal] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
+  const [leaveError, setLeaveError] = useState<string | null>(null);
   const [, setNextHandCountdown] = useState<number | null>(null);
   const [, setHandCompletionCountdown] = useState<number | null>(null);
   const [showdownProgress, setShowdownProgress] = useState(1);
@@ -385,6 +388,55 @@ export default function RoomPage({
     }
   };
 
+  const handleLeaveGame = async () => {
+    if (!myPlayer) return;
+    if (!safeEngineUrl()) {
+      alert("Engine URL not configured");
+      return;
+    }
+    if (!accessToken) {
+      alert("You must be signed in to leave the game");
+      return;
+    }
+
+    setIsLeaving(true);
+    setLeaveError(null);
+
+    try {
+      const response = await engineFetch(
+        `/rooms/${roomId}/leave`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            seatNumber: myPlayer.seat_number,
+          }),
+        },
+        accessToken,
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setLeaveError(data.error || "Failed to leave game");
+        return;
+      }
+
+      setShowLeaveConfirmModal(false);
+
+      if (data.removedImmediately) {
+        window.location.href = "/";
+      } else {
+        alert("You will auto-fold and leave after this hand completes.");
+      }
+    } catch (error) {
+      console.error("Error leaving game:", error);
+      setLeaveError("Failed to leave game");
+    } finally {
+      setIsLeaving(false);
+    }
+  };
+
   const handleDealHand = async () => {
     if (!safeEngineUrl()) {
       alert("Engine URL not configured");
@@ -437,10 +489,6 @@ export default function RoomPage({
         return;
       }
 
-      // Show feedback for scheduled pause
-      if (data.pauseScheduled) {
-        alert("Game will pause after this hand completes");
-      }
       // Real-time subscription will update UI automatically
     } catch (error) {
       console.error("Error toggling pause:", error);
@@ -931,6 +979,23 @@ export default function RoomPage({
             >
               Share
             </button>
+            {myPlayer && (
+              <button
+                onClick={() => {
+                  setLeaveError(null);
+                  setShowLeaveConfirmModal(true);
+                }}
+                disabled={isPartitionPhase}
+                className={`w-full sm:w-auto rounded-md border px-2 py-1.5 sm:px-3 sm:py-2 text-[11px] sm:text-sm text-cream-parchment transition-colors ${
+                  isPartitionPhase
+                    ? "cursor-not-allowed opacity-50 bg-red-900/40 border-red-500/20"
+                    : "bg-red-900/70 border-red-500/30 hover:border-red-400/60"
+                }`}
+                style={{ fontFamily: "Lato, sans-serif" }}
+              >
+                Leave Game
+              </button>
+            )}
             <button
               onClick={() => setShowFeedbackModal(true)}
               className="w-full sm:w-auto rounded-md bg-black/40 border border-white/10 px-2 py-1.5 sm:px-3 sm:py-2 text-[11px] sm:text-sm text-cream-parchment hover:border-whiskey-gold/50 transition-colors"
@@ -1416,6 +1481,99 @@ export default function RoomPage({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Leave Game Modal */}
+      {showLeaveConfirmModal && room && myPlayer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-tokyo-night/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-lg glass border border-red-500/30 p-4 sm:p-6 shadow-2xl">
+            <h2
+              className="mb-2 text-xl sm:text-2xl font-bold text-cream-parchment"
+              style={{ fontFamily: "Playfair Display, serif" }}
+            >
+              Leave Game
+            </h2>
+            <div
+              className="mb-4 text-sm text-cigar-ash"
+              style={{ fontFamily: "Roboto Mono, monospace" }}
+            >
+              <p>
+                Current stack:{" "}
+                <span className="font-semibold text-cream-parchment">
+                  ${myPlayer.chip_stack}
+                </span>
+              </p>
+              <p>
+                Total buy-in:{" "}
+                <span className="font-semibold text-cream-parchment">
+                  ${myPlayer.total_buy_in}
+                </span>
+              </p>
+              <p>
+                Net:{" "}
+                <span
+                  className={`font-semibold ${
+                    myPlayer.chip_stack - myPlayer.total_buy_in >= 0
+                      ? "text-whiskey-gold"
+                      : "text-velvet-red"
+                  }`}
+                >
+                  ${myPlayer.chip_stack - myPlayer.total_buy_in}
+                </span>
+              </p>
+            </div>
+
+            {gameState && (
+              <div
+                className="mb-3 rounded-md border border-red-500/30 bg-red-900/40 px-3 py-2 text-xs text-cream-parchment"
+                style={{ fontFamily: "Lato, sans-serif" }}
+              >
+                You will auto-fold and leave after the hand completes.
+              </div>
+            )}
+
+            {isOwner && (
+              <div
+                className="mb-3 rounded-md border border-whiskey-gold/30 bg-black/30 px-3 py-2 text-xs text-cream-parchment"
+                style={{ fontFamily: "Lato, sans-serif" }}
+              >
+                Ownership will be transferred to the next eligible player.
+              </div>
+            )}
+
+            {leaveError && (
+              <div
+                className="mb-3 rounded-md border border-velvet-red/40 bg-velvet-red/20 px-3 py-2 text-xs text-cream-parchment"
+                style={{ fontFamily: "Lato, sans-serif" }}
+              >
+                {leaveError}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLeaveConfirmModal(false);
+                  setLeaveError(null);
+                }}
+                className="flex-1 rounded-md bg-black/40 border border-white/10 px-4 py-2 text-cream-parchment hover:border-velvet-red/50 transition-colors"
+                style={{ fontFamily: "Lato, sans-serif" }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleLeaveGame}
+                disabled={isLeaving}
+                className="flex-1 rounded-md bg-red-900/70 border border-red-500/40 px-4 py-2 font-bold text-cream-parchment hover:border-red-400/70 disabled:opacity-50 transition-colors"
+                style={{ fontFamily: "Lato, sans-serif" }}
+              >
+                {isLeaving ? "Leaving..." : "Leave Game"}
+              </button>
+            </div>
           </div>
         </div>
       )}
