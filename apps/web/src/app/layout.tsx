@@ -19,6 +19,10 @@ export const metadata: Metadata = {
   title: "Degen Poker",
   description:
     "Play real-time poker online with friends across multiple game modes",
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({
