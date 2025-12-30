@@ -18,3 +18,24 @@ export const standardRoom: Room = {
   owner_auth_user_id: null,
   uses_two_decks: false,
 };
+
+export const room321Mode: Room = {
+  ...standardRoom,
+  id: "test-room-321",
+  game_mode: "game_mode_321",
+  uses_two_decks: false, // Will be updated during hand
+};
+
+export const roomHoldem: Room = {
+  ...standardRoom,
+  id: "test-room-holdem",
+  game_mode: "texas_holdem",
+  uses_two_decks: false,
+};
+
+export const roomIndianPoker: Room = {
+  ...standardRoom,
+  id: "test-room-indian",
+  game_mode: "indian_poker",
+  uses_two_decks: false,
+};

@@ -1,7 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { dealHand } from "../../src/logic.js";
-import { standardRoom } from "../fixtures/rooms.js";
-import { createPlayer, threePlayers, sixPlayers } from "../fixtures/players.js";
+import { standardRoom, room321Mode, roomHoldem } from "../fixtures/rooms.js";
+import {
+  createPlayer,
+  threePlayers,
+  sixPlayers,
+  sevenPlayers,
+  ninePlayers,
+} from "../fixtures/players.js";
 
 describe("Deal Hand", () => {
   describe("dealHand", () => {
@@ -265,6 +271,173 @@ describe("Deal Hand", () => {
         // Valid ranks: 2-9, T, J, Q, K, A
         // Valid suits: c, d, h, s
         expect(card).toMatch(/^[2-9TJQKA][cdhs]$/);
+      });
+    });
+  });
+
+  describe("Two Deck Integration", () => {
+    describe("321 mode with 7+ players", () => {
+      it("should use two decks and set usesTwoDecks flag", () => {
+        const result = dealHand(room321Mode, sevenPlayers);
+
+        expect(result.usesTwoDecks).toBe(true);
+        expect(result.playerHands).toHaveLength(7);
+
+        // Verify all cards dealt (7 × 6 = 42 player cards + 15 board cards = 57)
+        const totalCardsDealt =
+          result.playerHands.flatMap((h) => h.cards).length +
+          result.fullBoard1.length +
+          result.fullBoard2.length +
+          (result.fullBoard3?.length || 0);
+
+        expect(totalCardsDealt).toBe(57);
+      });
+
+      it("should deal cards from a double deck correctly", () => {
+        const result = dealHand(room321Mode, ninePlayers);
+
+        // Collect all dealt cards
+        const dealtCards = [
+          ...result.fullBoard1,
+          ...result.fullBoard2,
+          ...(result.fullBoard3 || []),
+          ...result.playerHands.flatMap((h) => h.cards),
+        ];
+
+        // With 9 players in 321 mode, we deal 69 cards total
+        expect(dealtCards).toHaveLength(69);
+
+        // Some cards will appear twice (since we're using a double deck with 2 of each card)
+        // But no card should appear more than twice (since there are only 2 of each in double deck)
+        const cardCounts = new Map<string, number>();
+        dealtCards.forEach((card) => {
+          cardCounts.set(card, (cardCounts.get(card) || 0) + 1);
+        });
+
+        cardCounts.forEach((count) => {
+          expect(count).toBeLessThanOrEqual(2);
+        });
+      });
+
+      it("should use two decks with 9 players (69 cards)", () => {
+        const result = dealHand(room321Mode, ninePlayers);
+
+        expect(result.usesTwoDecks).toBe(true);
+        expect(result.playerHands).toHaveLength(9);
+
+        // 9 × 6 = 54 player cards + 15 board cards = 69 total
+        const totalCardsDealt =
+          result.playerHands.flatMap((h) => h.cards).length +
+          result.fullBoard1.length +
+          result.fullBoard2.length +
+          (result.fullBoard3?.length || 0);
+
+        expect(totalCardsDealt).toBe(69);
+      });
+    });
+
+    describe("321 mode with 6 players", () => {
+      it("should use single deck when 51 cards needed", () => {
+        const result = dealHand(room321Mode, sixPlayers);
+
+        expect(result.usesTwoDecks).toBe(false);
+        // 6 × 6 = 36 player cards + 15 board cards = 51 total (fits in 52)
+      });
+    });
+
+    describe("PLO with many players", () => {
+      it("should use two decks with 11+ players", () => {
+        const elevenPlayers = [
+          ...ninePlayers,
+          createPlayer({ seat_number: 10 }),
+          createPlayer({ seat_number: 11 }),
+        ];
+
+        const result = dealHand(standardRoom, elevenPlayers);
+
+        expect(result.usesTwoDecks).toBe(true);
+        expect(result.playerHands).toHaveLength(11);
+        // 11 × 4 = 44 player cards + 10 board cards = 54 total (needs 2 decks)
+      });
+
+      it("should use single deck with 10 players", () => {
+        const tenPlayers = [...ninePlayers, createPlayer({ seat_number: 10 })];
+
+        const result = dealHand(standardRoom, tenPlayers);
+
+        expect(result.usesTwoDecks).toBe(false);
+        // 10 × 4 = 40 player cards + 10 board cards = 50 total (fits in 52)
+      });
+    });
+
+    describe("Hold'em edge cases", () => {
+      it("should use single deck with 23 players (51 cards)", () => {
+        const twentyThreePlayers = Array.from({ length: 23 }, (_, i) =>
+          createPlayer({ seat_number: i + 1 }),
+        );
+
+        const result = dealHand(roomHoldem, twentyThreePlayers);
+
+        expect(result.usesTwoDecks).toBe(false);
+        // 23 × 2 = 46 player cards + 5 board cards = 51 total
+      });
+
+      it("should use two decks with 24+ players (53+ cards)", () => {
+        const twentyFourPlayers = Array.from({ length: 24 }, (_, i) =>
+          createPlayer({ seat_number: i + 1 }),
+        );
+
+        const result = dealHand(roomHoldem, twentyFourPlayers);
+
+        expect(result.usesTwoDecks).toBe(true);
+        // 24 × 2 = 48 player cards + 5 board cards = 53 total
+      });
+    });
+
+    describe("Card distribution with two decks", () => {
+      it("should not deal more than 2 of any card (double deck limit)", () => {
+        // Test with maximum players in 321 mode
+        const result = dealHand(room321Mode, ninePlayers);
+
+        const allDealtCards = [
+          ...result.fullBoard1,
+          ...result.fullBoard2,
+          ...(result.fullBoard3 || []),
+          ...result.playerHands.flatMap((h) => h.cards),
+        ];
+
+        // Create a frequency map
+        const cardFrequency = new Map<string, number>();
+        allDealtCards.forEach((card) => {
+          cardFrequency.set(card, (cardFrequency.get(card) || 0) + 1);
+        });
+
+        // With double deck, there are exactly 2 of each card
+        // So no card should appear more than twice in dealt cards
+        cardFrequency.forEach((count) => {
+          expect(count).toBeLessThanOrEqual(2);
+        });
+
+        // Verify we dealt 69 cards total
+        expect(allDealtCards.length).toBe(69);
+      });
+
+      it("should deal valid cards from double deck", () => {
+        const result = dealHand(room321Mode, ninePlayers);
+
+        const allDealtCards = [
+          ...result.fullBoard1,
+          ...result.fullBoard2,
+          ...(result.fullBoard3 || []),
+          ...result.playerHands.flatMap((h) => h.cards),
+        ];
+
+        // All cards should be valid card strings
+        allDealtCards.forEach((card) => {
+          expect(typeof card).toBe("string");
+          expect(card).toHaveLength(2);
+          expect(card).toMatch(/^[2-9TJQKA][cdhs]$/);
+        });
       });
     });
   });

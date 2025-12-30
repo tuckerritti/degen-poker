@@ -126,3 +126,7 @@ Temporary Items
 supabase/.branches/
 supabase/.temp/
 
+# Test coverage
+coverage/
+**/coverage/
+

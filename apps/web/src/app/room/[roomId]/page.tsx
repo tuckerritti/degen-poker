@@ -843,10 +843,19 @@ export default function RoomPage({
     ? "grid-rows-[auto_1fr_auto]"
     : "grid-rows-[auto_1fr]";
 
-  const gameModeLabel =
-    room?.game_mode === "double_board_bomb_pot_plo"
-      ? "Double Board Bomb Pot PLO"
-      : "Loading game...";
+  const getGameModeLabel = (mode: string): string => {
+    const labels: Record<string, string> = {
+      double_board_bomb_pot_plo: "Double Board Bomb Pot PLO",
+      texas_holdem: "Texas Hold'em",
+      indian_poker: "Indian Poker",
+      game_mode_321: "3-2-1 Bomb Pot",
+    };
+    return labels[mode] || "Unknown Game Mode";
+  };
+
+  const gameModeLabel = room?.game_mode
+    ? getGameModeLabel(room.game_mode)
+    : "Loading game...";
 
   const isShowdownPhase =
     gameState?.phase === "showdown" || gameState?.phase === "complete";
@@ -885,12 +894,22 @@ export default function RoomPage({
         <div className="glass rounded-lg p-2 sm:p-3 shadow-lg max-w-6xl mx-auto">
           <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex-1 min-w-0 space-y-0.5">
-              <h1
-                className="text-base sm:text-xl font-bold text-cream-parchment"
-                style={{ fontFamily: "Playfair Display, serif" }}
-              >
-                {gameModeLabel}
-              </h1>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1
+                  className="text-base sm:text-xl font-bold text-cream-parchment"
+                  style={{ fontFamily: "Playfair Display, serif" }}
+                >
+                  {gameModeLabel}
+                </h1>
+                {room?.uses_two_decks && (
+                  <span
+                    className="rounded-full bg-whiskey-gold/20 px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold text-whiskey-gold align-middle whitespace-nowrap"
+                    style={{ fontFamily: "Lato, sans-serif" }}
+                  >
+                    2 Decks in Use
+                  </span>
+                )}
+              </div>
               <p
                 className="text-[11px] sm:text-xs text-cigar-ash"
                 style={{ fontFamily: "Roboto Mono, monospace" }}
