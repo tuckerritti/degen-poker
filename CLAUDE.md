@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a **Double Board Bomb Pot PLO (Pot-Limit Omaha)** poker application built as a Turborepo monorepo. The architecture separates game logic into an Express engine service and a Next.js web frontend, with Supabase providing database and real-time subscriptions.
 
+We want the simplest change possible. We don't care about migration. Code readability matters most, and we're happy to make bigger changes to achieve it.
+
 **Key Innovation:** Security-first architecture where hole cards are stored server-side in RLS-protected tables, preventing players from seeing each other's hands via client-side manipulation.
 
 ## Development Commands
