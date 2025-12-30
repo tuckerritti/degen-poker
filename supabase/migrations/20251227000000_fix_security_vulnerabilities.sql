@@ -169,6 +169,26 @@ begin
     raise exception 'This function only works for Indian Poker mode';
   end if;
 
+  -- Allow service role bypass (server-side access)
+  if auth.role() = 'service_role' then
+    -- no-op
+  else
+    -- Ensure caller is the player in the requesting seat for this hand
+    if auth.uid() is null then
+      raise exception 'Not authorized';
+    end if;
+
+    if not exists (
+      select 1
+      from public.player_hands ph_self
+      where ph_self.game_state_id = game_state_id_param
+        and ph_self.seat_number = requesting_seat_number
+        and ph_self.auth_user_id = auth.uid()
+    ) then
+      raise exception 'Not authorized';
+    end if;
+  end if;
+
   -- Return all player cards EXCEPT the requesting player's card
   -- This is server-enforced visibility control
   return query

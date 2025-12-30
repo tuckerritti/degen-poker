@@ -31,18 +31,22 @@ export default function RoomPage({
   const { playerHand } = usePlayerHand(roomId, sessionId);
   const { handResult } = useLatestHandResult(roomId);
 
+  const [room, setRoom] = useState<Room | null>(null);
+  const [roomLoading, setRoomLoading] = useState(true);
+
   const myPlayer = players.find((p) => p.auth_user_id === sessionId);
+  const isIndianPoker = room?.game_mode === "indian_poker";
+  const canSeeIndianPokerCards =
+    isIndianPoker && !!myPlayer && !myPlayer.is_spectating;
 
   // SECURITY: For Indian Poker, fetch visible cards from secure endpoint
   // This ensures players only see other players' cards, never their own
   const { visibleCards: indianPokerVisibleCards } = useIndianPokerVisibleCards(
     roomId,
     gameState?.id ?? null,
-    myPlayer?.seat_number ?? null
+    accessToken || null,
+    canSeeIndianPokerCards,
   );
-
-  const [room, setRoom] = useState<Room | null>(null);
-  const [roomLoading, setRoomLoading] = useState(true);
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [selectedSeat, setSelectedSeat] = useState<number | null>(null);
@@ -813,9 +817,15 @@ export default function RoomPage({
   const isShowdownPhase =
     gameState?.phase === "showdown" || gameState?.phase === "complete";
 
-  const board1Winners = handResult?.board1_winners as unknown as number[] | null;
-  const board2Winners = handResult?.board2_winners as unknown as number[] | null;
-  const board3Winners = handResult?.board3_winners as unknown as number[] | null;
+  const board1Winners = handResult?.board1_winners as unknown as
+    | number[]
+    | null;
+  const board2Winners = handResult?.board2_winners as unknown as
+    | number[]
+    | null;
+  const board3Winners = handResult?.board3_winners as unknown as
+    | number[]
+    | null;
 
   const stakesLabel = room
     ? `Bomb pot ante (BB): ${room.big_blind}`

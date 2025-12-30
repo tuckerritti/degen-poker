@@ -28,11 +28,13 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/seedrandom": "^3.0.8",
+    "@types/supertest": "^6.0.3",
     "@typescript-eslint/eslint-plugin": "^8.50.0",
     "@typescript-eslint/parser": "^8.50.0",
     "@vitest/coverage-v8": "^4.0.15",
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
+    "supertest": "^7.1.4",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.15"

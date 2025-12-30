@@ -354,62 +354,6 @@ export type Database = {
           },
         ]
       }
-      player_sessions: {
-        Row: {
-          auth_user_id: string | null
-          created_at: string
-          display_name: string
-          final_chip_stack: number
-          hands_played: number
-          id: string
-          joined_at: string
-          left_at: string
-          left_during_hand: boolean
-          net_profit_loss: number
-          room_id: string
-          seat_number: number
-          total_buy_in: number
-        }
-        Insert: {
-          auth_user_id?: string | null
-          created_at?: string
-          display_name: string
-          final_chip_stack?: number
-          hands_played?: number
-          id?: string
-          joined_at?: string
-          left_at?: string
-          left_during_hand?: boolean
-          net_profit_loss?: number
-          room_id: string
-          seat_number: number
-          total_buy_in?: number
-        }
-        Update: {
-          auth_user_id?: string | null
-          created_at?: string
-          display_name?: string
-          final_chip_stack?: number
-          hands_played?: number
-          id?: string
-          joined_at?: string
-          left_at?: string
-          left_during_hand?: boolean
-          net_profit_loss?: number
-          room_id?: string
-          seat_number?: number
-          total_buy_in?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "player_sessions_room_id_fkey"
-            columns: ["room_id"]
-            isOneToOne: false
-            referencedRelation: "rooms"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       room_players: {
         Row: {
           auth_user_id: string | null
@@ -546,12 +490,20 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      action_type: "fold" | "check" | "call" | "bet" | "raise" | "all_in"
+      action_type:
+        | "fold"
+        | "check"
+        | "call"
+        | "bet"
+        | "raise"
+        | "all_in"
+        | "flip_card"
       game_mode:
         | "double_board_bomb_pot_plo"
         | "texas_holdem"
         | "indian_poker"
         | "game_mode_321"
+        | "holdem_flip"
       game_phase:
         | "waiting"
         | "dealing"
@@ -689,12 +641,21 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      action_type: ["fold", "check", "call", "bet", "raise", "all_in"],
+      action_type: [
+        "fold",
+        "check",
+        "call",
+        "bet",
+        "raise",
+        "all_in",
+        "flip_card",
+      ],
       game_mode: [
         "double_board_bomb_pot_plo",
         "texas_holdem",
         "indian_poker",
         "game_mode_321",
+        "holdem_flip",
       ],
       game_phase: [
         "waiting",

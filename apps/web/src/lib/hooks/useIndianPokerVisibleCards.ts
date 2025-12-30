@@ -12,7 +12,8 @@ import { clientLogger } from "@/lib/client-logger";
 export function useIndianPokerVisibleCards(
   roomId: string | null,
   gameStateId: string | null,
-  mySeatNumber: number | null,
+  accessToken: string | null,
+  enabled = true,
 ) {
   const [visibleCards, setVisibleCards] = useState<Record<
     string,
@@ -23,7 +24,7 @@ export function useIndianPokerVisibleCards(
 
   useEffect(() => {
     // Only fetch if we have all required params
-    if (!roomId || !gameStateId || mySeatNumber === null) {
+    if (!enabled || !roomId || !gameStateId || !accessToken) {
       setVisibleCards(null);
       setLoading(false);
       return;
@@ -39,33 +40,31 @@ export function useIndianPokerVisibleCards(
           {
             roomId,
             gameStateId,
-            mySeatNumber,
           },
         );
 
         const response = await engineFetch(
-          `/rooms/${roomId}/game-states/${gameStateId}/indian-poker-cards?seat=${mySeatNumber}`,
+          `/rooms/${roomId}/game-states/${gameStateId}/indian-poker-cards`,
           {
             method: "GET",
           },
+          accessToken,
         );
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
           throw new Error(
-            errorData.error || `Failed to fetch visible cards: ${response.statusText}`,
+            errorData.error ||
+              `Failed to fetch visible cards: ${response.statusText}`,
           );
         }
 
         const data = await response.json();
-        clientLogger.info(
-          "useIndianPokerVisibleCards: Visible cards fetched",
-          {
-            roomId,
-            gameStateId,
-            cardCount: Object.keys(data.visibleCards || {}).length,
-          },
-        );
+        clientLogger.info("useIndianPokerVisibleCards: Visible cards fetched", {
+          roomId,
+          gameStateId,
+          cardCount: Object.keys(data.visibleCards || {}).length,
+        });
 
         setVisibleCards(data.visibleCards || {});
       } catch (err) {
@@ -86,7 +85,7 @@ export function useIndianPokerVisibleCards(
 
     // Re-fetch when game state changes (e.g., phase transitions)
     // Could also set up polling here if needed
-  }, [roomId, gameStateId, mySeatNumber]);
+  }, [roomId, gameStateId, accessToken, enabled]);
 
   return { visibleCards, loading, error };
 }

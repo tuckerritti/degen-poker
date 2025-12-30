@@ -288,9 +288,10 @@ describe("321 game mode", () => {
       expect(boardState.board1).toEqual(fullBoard1);
       expect(boardState.board2).toEqual(fullBoard2);
       expect(boardState.board3).toEqual(fullBoard3);
-      expect((boardState as any).fullBoard1).toBeUndefined();
-      expect((boardState as any).fullBoard2).toBeUndefined();
-      expect((boardState as any).fullBoard3).toBeUndefined();
+      const boardStateRecord = boardState as Record<string, unknown>;
+      expect(boardStateRecord.fullBoard1).toBeUndefined();
+      expect(boardStateRecord.fullBoard2).toBeUndefined();
+      expect(boardStateRecord.fullBoard3).toBeUndefined();
     });
 
     it("should fast-forward to partition when only one non-all-in player remains", () => {

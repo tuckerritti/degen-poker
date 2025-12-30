@@ -722,11 +722,7 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
         } else {
           // PLO: double board winner determination
           const { board1Winners: ploBoard1, board2Winners: ploBoard2 } =
-            determineDoubleBoardWinners(
-            activeHands,
-            board1,
-            board2,
-          );
+            determineDoubleBoardWinners(activeHands, board1, board2);
           board1Winners = ploBoard1;
           board2Winners = ploBoard2;
           payouts = endOfHandPayout(sidePots, ploBoard1, ploBoard2);
@@ -767,9 +763,7 @@ app.post("/rooms/:roomId/actions", async (req: Request, res: Response) => {
         });
         const activeSeated = finalPlayers.filter(
           (p) =>
-            !p.is_spectating &&
-            !p.is_sitting_out &&
-            !p.waiting_for_next_hand,
+            !p.is_spectating && !p.is_sitting_out && !p.waiting_for_next_hand,
         );
         const withChips = activeSeated.filter((p) => (p.chip_stack ?? 0) > 0);
         const shouldAutoPause =
@@ -946,11 +940,9 @@ app.post("/rooms/:roomId/partitions", async (req: Request, res: Response) => {
     }
 
     if (playerCards.length !== 6) {
-      return res
-        .status(400)
-        .json({
-          error: "Partition must use exactly the player's 6 hole cards",
-        });
+      return res.status(400).json({
+        error: "Partition must use exactly the player's 6 hole cards",
+      });
     }
 
     const remaining = new Map<string, number>();
@@ -973,11 +965,9 @@ app.post("/rooms/:roomId/partitions", async (req: Request, res: Response) => {
       (count) => count !== 0,
     );
     if (invalidCard || hasRemainder) {
-      return res
-        .status(400)
-        .json({
-          error: "Partition must use exactly the player's 6 hole cards",
-        });
+      return res.status(400).json({
+        error: "Partition must use exactly the player's 6 hole cards",
+      });
     }
 
     const now = new Date().toISOString();
@@ -1181,10 +1171,7 @@ app.post("/rooms/:roomId/partitions", async (req: Request, res: Response) => {
         : p;
     });
     const activeSeated = finalPlayers.filter(
-      (p) =>
-        !p.is_spectating &&
-        !p.is_sitting_out &&
-        !p.waiting_for_next_hand,
+      (p) => !p.is_spectating && !p.is_sitting_out && !p.waiting_for_next_hand,
     );
     const withChips = activeSeated.filter((p) => (p.chip_stack ?? 0) > 0);
     const shouldAutoPause = activeSeated.length === 2 && withChips.length === 1;
@@ -1224,13 +1211,16 @@ app.post("/rooms/:roomId/partitions", async (req: Request, res: Response) => {
 // Returns visible cards for Indian Poker mode (all OTHER players' cards)
 // ============================================================
 const indianPokerCardsQuerySchema = z.object({
-  seat: z.coerce.number().int().positive(),
+  seat: z.coerce.number().int().min(0).optional(),
 });
 
 app.get(
   "/rooms/:roomId/game-states/:gameStateId/indian-poker-cards",
   async (req: Request, res: Response) => {
     try {
+      const userId = await requireUser(req, res);
+      if (!userId) return;
+
       const { roomId, gameStateId } = req.params;
       const queryParse = indianPokerCardsQuerySchema.safeParse(req.query);
 
@@ -1241,7 +1231,7 @@ app.get(
         });
       }
 
-      const { seat: requestingSeat } = queryParse.data;
+      const { seat: requestedSeat } = queryParse.data;
 
       // Verify room exists
       const room = await fetchRoom(roomId);
@@ -1254,6 +1244,30 @@ app.get(
         return res.status(400).json({
           error: "This endpoint is only for Indian Poker mode",
         });
+      }
+
+      // Verify requester is a seated (non-spectating) player in this room
+      const { data: requestingPlayer, error: playerError } = await supabase
+        .from("room_players")
+        .select("seat_number, is_spectating")
+        .eq("room_id", roomId)
+        .eq("auth_user_id", userId)
+        .maybeSingle();
+      if (playerError) throw playerError;
+      if (!requestingPlayer || requestingPlayer.is_spectating) {
+        return res
+          .status(403)
+          .json({ error: "Player is not seated in this room" });
+      }
+
+      // If client provided a seat, ensure it matches the authenticated player
+      if (
+        requestedSeat !== undefined &&
+        requestedSeat !== requestingPlayer.seat_number
+      ) {
+        return res
+          .status(403)
+          .json({ error: "Seat mismatch for requesting player" });
       }
 
       // Verify game state exists and belongs to this room
@@ -1269,13 +1283,26 @@ app.get(
         return res.status(404).json({ error: "Game state not found" });
       }
 
+      // Verify requester is actually in this hand
+      const { data: playerHand, error: handError } = await supabase
+        .from("player_hands")
+        .select("id")
+        .eq("game_state_id", gameStateId)
+        .eq("room_id", roomId)
+        .eq("seat_number", requestingPlayer.seat_number)
+        .maybeSingle();
+      if (handError) throw handError;
+      if (!playerHand) {
+        return res.status(403).json({ error: "Player is not in this hand" });
+      }
+
       // Call the secure database function to get visible cards
       const { data: visibleCards, error: cardsError } = await supabase.rpc(
         "get_indian_poker_visible_cards",
         {
           game_state_id_param: gameStateId,
-          requesting_seat_number: requestingSeat,
-        }
+          requesting_seat_number: requestingPlayer.seat_number,
+        },
       );
 
       if (cardsError) throw cardsError;
@@ -1288,18 +1315,21 @@ app.get(
 
       res.json({
         gameStateId,
-        requestingSeat,
+        requestingSeat: requestingPlayer.seat_number,
         visibleCards: visibleCardsMap,
       });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      logger.error({ err, errorMessage }, "Error fetching Indian Poker visible cards");
+      logger.error(
+        { err, errorMessage },
+        "Error fetching Indian Poker visible cards",
+      );
       res.status(500).json({
         error: "Failed to fetch visible cards",
         details: errorMessage,
       });
     }
-  }
+  },
 );
 
 async function fetchRoom(roomId: string): Promise<Room | null> {
@@ -1336,43 +1366,51 @@ async function fetchLatestGameState(
   return data as GameStateRow | null;
 }
 
-const server = app.listen(port, () => {
-  logger.info(`Engine listening on ${port}`);
+let server: ReturnType<typeof app.listen> | null = null;
 
-  // Start cleanup scheduler for completed hands
-  handCompletionCleanup.start();
-});
+if (process.env.NODE_ENV !== "test") {
+  server = app.listen(port, () => {
+    logger.info(`Engine listening on ${port}`);
 
-// Graceful shutdown handler
-async function gracefulShutdown(signal: string) {
-  logger.info(`${signal} received, starting graceful shutdown`);
-  isShuttingDown = true;
-
-  // Stop accepting new connections
-  server.close(() => {
-    logger.info("HTTP server closed");
+    // Start cleanup scheduler for completed hands
+    handCompletionCleanup.start();
   });
 
-  // Stop cleanup scheduler and wait for in-progress cleanup
-  await handCompletionCleanup.stop();
+  // Graceful shutdown handler
+  async function gracefulShutdown(signal: string) {
+    logger.info(`${signal} received, starting graceful shutdown`);
+    isShuttingDown = true;
 
-  // Wait for active requests to complete (with timeout)
-  const maxWaitMs = 10000;
-  const startTime = Date.now();
-  while (activeRequests > 0 && Date.now() - startTime < maxWaitMs) {
-    logger.info(`Waiting for ${activeRequests} active requests to complete...`);
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    // Stop accepting new connections
+    server?.close(() => {
+      logger.info("HTTP server closed");
+    });
+
+    // Stop cleanup scheduler and wait for in-progress cleanup
+    await handCompletionCleanup.stop();
+
+    // Wait for active requests to complete (with timeout)
+    const maxWaitMs = 10000;
+    const startTime = Date.now();
+    while (activeRequests > 0 && Date.now() - startTime < maxWaitMs) {
+      logger.info(
+        `Waiting for ${activeRequests} active requests to complete...`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    if (activeRequests > 0) {
+      logger.warn(
+        `Forcing shutdown with ${activeRequests} active requests still pending`,
+      );
+    }
+
+    logger.info("Graceful shutdown complete");
+    process.exit(0);
   }
 
-  if (activeRequests > 0) {
-    logger.warn(
-      `Forcing shutdown with ${activeRequests} active requests still pending`,
-    );
-  }
-
-  logger.info("Graceful shutdown complete");
-  process.exit(0);
+  process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+  process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 }
 
-process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
-process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+export { app };

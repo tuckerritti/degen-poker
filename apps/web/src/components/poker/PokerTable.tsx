@@ -417,10 +417,13 @@ export function PokerTable({
             : "z-10";
 
         // Winner/loser status for showdown phase
-        const winnerStatus = isShowdownPhase && !isEmpty
-          ? getWinnerStatus(seatNumber)
-          : null;
-        const isLoser = isShowdownPhase && !isEmpty && !player.has_folded && !winnerStatus?.isWinner;
+        const winnerStatus =
+          isShowdownPhase && !isEmpty ? getWinnerStatus(seatNumber) : null;
+        const isLoser =
+          isShowdownPhase &&
+          !isEmpty &&
+          !player.has_folded &&
+          !winnerStatus?.isWinner;
 
         if (shouldHideEmptySeats && isEmpty) {
           return null;
@@ -481,11 +484,16 @@ export function PokerTable({
                     style={{ fontFamily: "Lato, sans-serif" }}
                   >
                     {winnerStatus?.isWinner ? (
-                      <span className="text-green-400">{winnerStatus.displayText}</span>
+                      <span className="text-green-400">
+                        {winnerStatus.displayText}
+                      </span>
                     ) : isShowdownPhase && !player.has_folded ? (
                       <span className="text-red-400">Lost</span>
                     ) : (
-                      <span className="text-whiskey-gold" style={{ fontFamily: "Roboto Mono, monospace" }}>
+                      <span
+                        className="text-whiskey-gold"
+                        style={{ fontFamily: "Roboto Mono, monospace" }}
+                      >
                         ${player.chip_stack}
                       </span>
                     )}
