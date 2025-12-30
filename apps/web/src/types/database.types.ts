@@ -354,55 +354,34 @@ export type Database = {
           },
         ]
       }
-      player_sessions: {
+      room_members: {
         Row: {
+          anon_session_id: string | null
           auth_user_id: string | null
-          created_at: string
-          display_name: string
-          final_chip_stack: number
-          hands_played: number
           id: string
+          is_active: boolean
           joined_at: string
-          left_at: string
-          left_during_hand: boolean
-          net_profit_loss: number
           room_id: string
-          seat_number: number
-          total_buy_in: number
         }
         Insert: {
+          anon_session_id?: string | null
           auth_user_id?: string | null
-          created_at?: string
-          display_name: string
-          final_chip_stack?: number
-          hands_played?: number
           id?: string
+          is_active?: boolean
           joined_at?: string
-          left_at?: string
-          left_during_hand?: boolean
-          net_profit_loss?: number
           room_id: string
-          seat_number: number
-          total_buy_in?: number
         }
         Update: {
+          anon_session_id?: string | null
           auth_user_id?: string | null
-          created_at?: string
-          display_name?: string
-          final_chip_stack?: number
-          hands_played?: number
           id?: string
+          is_active?: boolean
           joined_at?: string
-          left_at?: string
-          left_during_hand?: boolean
-          net_profit_loss?: number
           room_id?: string
-          seat_number?: number
-          total_buy_in?: number
         }
         Relationships: [
           {
-            foreignKeyName: "player_sessions_room_id_fkey"
+            foreignKeyName: "room_members_room_id_fkey"
             columns: ["room_id"]
             isOneToOne: false
             referencedRelation: "rooms"
@@ -543,7 +522,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_indian_poker_visible_cards: {
+        Args: { game_state_id_param: string; requesting_seat_number: number }
+        Returns: {
+          seat_number: number
+          visible_card: string
+        }[]
+      }
+      is_room_member: { Args: { room_id_param: string }; Returns: boolean }
     }
     Enums: {
       action_type: "fold" | "check" | "call" | "bet" | "raise" | "all_in"

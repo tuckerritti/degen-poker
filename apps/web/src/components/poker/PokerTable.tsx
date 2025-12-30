@@ -362,7 +362,7 @@ export function PokerTable({
               fill="#0b4120"
               opacity="0.7"
             >
-              DEGENERATE
+              SHIELD LOGISTICS LLC
             </text>
           </svg>
         </div>
