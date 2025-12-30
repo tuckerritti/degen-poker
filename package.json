@@ -21,5 +21,8 @@
     "react-scan": "^0.4.3",
     "turbo": "^2.7.1",
     "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "nodemailer": "^7.0.12"
   }
 }

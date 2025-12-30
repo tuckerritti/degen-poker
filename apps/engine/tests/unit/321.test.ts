@@ -281,17 +281,17 @@ describe("321 game mode", () => {
         board1?: string[];
         board2?: string[];
         board3?: string[];
-        fullBoard1?: string[];
-        fullBoard2?: string[];
-        fullBoard3?: string[];
       };
 
+      // SECURITY: At partition phase, all 5 cards are revealed in board1/2/3
+      // fullBoard1/2/3 should NOT be present (security fix to prevent card leaks)
       expect(boardState.board1).toEqual(fullBoard1);
       expect(boardState.board2).toEqual(fullBoard2);
       expect(boardState.board3).toEqual(fullBoard3);
-      expect(boardState.fullBoard1).toEqual(fullBoard1);
-      expect(boardState.fullBoard2).toEqual(fullBoard2);
-      expect(boardState.fullBoard3).toEqual(fullBoard3);
+      const boardStateRecord = boardState as Record<string, unknown>;
+      expect(boardStateRecord.fullBoard1).toBeUndefined();
+      expect(boardStateRecord.fullBoard2).toBeUndefined();
+      expect(boardStateRecord.fullBoard3).toBeUndefined();
     });
 
     it("should fast-forward to partition when only one non-all-in player remains", () => {

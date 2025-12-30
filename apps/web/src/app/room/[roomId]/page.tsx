@@ -6,6 +6,7 @@ import { useRoomPlayers } from "@/lib/hooks/useRoomPlayers";
 import { useGameState } from "@/lib/hooks/useGameState";
 import { usePlayerHand } from "@/lib/hooks/usePlayerHand";
 import { useLatestHandResult } from "@/lib/hooks/useLatestHandResult";
+import { useIndianPokerVisibleCards } from "@/lib/hooks/useIndianPokerVisibleCards";
 import { getBrowserClient } from "@/lib/supabase/client";
 import { ActionPanel } from "@/components/poker/ActionPanel";
 import { PokerTable } from "@/components/poker/PokerTable";
@@ -60,6 +61,18 @@ export default function RoomPage({
   >("idle");
 
   const myPlayer = players.find((p) => p.auth_user_id === sessionId);
+  const isIndianPoker = room?.game_mode === "indian_poker";
+  const canSeeIndianPokerCards =
+    isIndianPoker && !!myPlayer && !myPlayer.is_spectating;
+
+  // SECURITY: For Indian Poker, fetch visible cards from secure endpoint
+  // This ensures players only see other players' cards, never their own
+  const { visibleCards: indianPokerVisibleCards } = useIndianPokerVisibleCards(
+    roomId,
+    gameState?.id ?? null,
+    accessToken || null,
+    canSeeIndianPokerCards,
+  );
   const isMyTurn =
     gameState &&
     myPlayer &&
@@ -634,6 +647,9 @@ export default function RoomPage({
     const boardB = boardState.board2 || [];
     const boardC = boardState.board3 || [];
     let visiblePlayerCards = boardState.visible_player_cards || {};
+    if (isIndianPoker) {
+      visiblePlayerCards = indianPokerVisibleCards || {};
+    }
 
     // Use revealed_partitions during showdown, otherwise use player_partitions
     const rawPartitions =
@@ -700,7 +716,7 @@ export default function RoomPage({
       reconstructedCards,
       hasBoardState: true,
     };
-  }, [gameState?.board_state]);
+  }, [gameState?.board_state, isIndianPoker, indianPokerVisibleCards]);
 
   const {
     boardA,

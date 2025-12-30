@@ -178,12 +178,12 @@ export default function Home() {
                   >
                     Small Blind
                   </label>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  value={smallBlind}
-                  onChange={(e) => setSmallBlind(Number(e.target.value))}
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={smallBlind}
+                    onChange={(e) => setSmallBlind(Number(e.target.value))}
                     className="mt-1 block w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-cream-parchment shadow-sm focus:border-whiskey-gold focus:outline-none focus:ring-1 focus:ring-whiskey-gold backdrop-blur-sm"
                     style={{ fontFamily: "Roboto Mono, monospace" }}
                     min={1}
@@ -197,12 +197,12 @@ export default function Home() {
                   >
                     Big Blind
                   </label>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  value={bigBlind}
-                  onChange={(e) => setBigBlind(Number(e.target.value))}
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={bigBlind}
+                    onChange={(e) => setBigBlind(Number(e.target.value))}
                     className="mt-1 block w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-cream-parchment shadow-sm focus:border-whiskey-gold focus:outline-none focus:ring-1 focus:ring-whiskey-gold backdrop-blur-sm"
                     style={{ fontFamily: "Roboto Mono, monospace" }}
                     min={smallBlind + 1}
