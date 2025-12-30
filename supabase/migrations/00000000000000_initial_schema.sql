@@ -1,4 +1,4 @@
--- Squashed schema for Degen Poker (engine + security + realtime)
+-- Squashed schema for Shield Logistics LLC (engine + security + realtime)
 -- Generated on 2025-12-06
 
 -- Extensions

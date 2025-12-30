@@ -14,33 +14,28 @@ interface GameModeConfig {
   id: GameMode;
   name: string;
   enabled: boolean;
-  description: string;
 }
 
 const GAME_MODES: GameModeConfig[] = [
   {
-    id: "double_board_bomb_pot_plo",
-    name: "Double Board Bomb Pot PLO",
-    enabled: true,
-    description: "4 hole cards, 2 boards, bomb pot antes",
-  },
-  {
     id: "texas_holdem",
     name: "Texas Hold'em",
     enabled: true,
-    description: "2 hole cards, 1 board, standard blinds",
+  },
+  {
+    id: "double_board_bomb_pot_plo",
+    name: "Double Board Bomb Pot PLO",
+    enabled: true,
   },
   {
     id: "indian_poker",
     name: "Indian Poker",
     enabled: true,
-    description: "1 card on forehead, bomb pot antes, high card wins",
   },
   {
     id: "game_mode_321",
-    name: "3-2-1 Bomb Pot",
+    name: "321",
     enabled: true,
-    description: "6 hole cards, 3 boards, partition cards after river",
   },
 ];
 
@@ -72,7 +67,6 @@ export default function Home() {
     if (mode === "texas_holdem") {
       return { smallBlind, bigBlind };
     }
-    // PLO/Indian Poker/321 bomb pots: big blind value is the ante; SB set to 0
     return { smallBlind: 0, bigBlind: ploAnte };
   };
 
@@ -126,14 +120,14 @@ export default function Home() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-tokyo-night p-4">
+    <div className="flex min-h-screen items-center justify-center bg-royal-blue p-4">
       <main className="w-full max-w-4xl">
         <div className="mb-6 sm:mb-8 text-center">
           <h1
-            className="mb-2 text-4xl sm:text-6xl font-bold text-cream-parchment glow-gold"
-            style={{ fontFamily: "Cinzel, serif" }}
+            className="mb-2 text-3xl sm:text-5xl font-semibold text-cream-parchment tracking-[0.18em]"
+            style={{ fontFamily: "Lato, sans-serif" }}
           >
-            DEGEN POKER
+            SHIELD LOGISTICS LLC
           </h1>
         </div>
 
@@ -165,12 +159,6 @@ export default function Home() {
                 >
                   {mode.name}
                 </h3>
-                <p
-                  className="mt-1 text-xs text-cigar-ash"
-                  style={{ fontFamily: "Lato, sans-serif" }}
-                >
-                  {mode.description}
-                </p>
                 {!mode.enabled && (
                   <span className="mt-2 inline-block text-xs font-semibold text-cigar-ash">
                     COMING SOON
@@ -190,10 +178,12 @@ export default function Home() {
                   >
                     Small Blind
                   </label>
-                  <input
-                    type="number"
-                    value={smallBlind}
-                    onChange={(e) => setSmallBlind(Number(e.target.value))}
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={smallBlind}
+                  onChange={(e) => setSmallBlind(Number(e.target.value))}
                     className="mt-1 block w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-cream-parchment shadow-sm focus:border-whiskey-gold focus:outline-none focus:ring-1 focus:ring-whiskey-gold backdrop-blur-sm"
                     style={{ fontFamily: "Roboto Mono, monospace" }}
                     min={1}
@@ -207,10 +197,12 @@ export default function Home() {
                   >
                     Big Blind
                   </label>
-                  <input
-                    type="number"
-                    value={bigBlind}
-                    onChange={(e) => setBigBlind(Number(e.target.value))}
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={bigBlind}
+                  onChange={(e) => setBigBlind(Number(e.target.value))}
                     className="mt-1 block w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-cream-parchment shadow-sm focus:border-whiskey-gold focus:outline-none focus:ring-1 focus:ring-whiskey-gold backdrop-blur-sm"
                     style={{ fontFamily: "Roboto Mono, monospace" }}
                     min={smallBlind + 1}
@@ -224,10 +216,12 @@ export default function Home() {
                   className="block text-sm font-medium text-cigar-ash"
                   style={{ fontFamily: "Lato, sans-serif" }}
                 >
-                  Bomb Pot Ante (per player)
+                  Bomb Pot Ante
                 </label>
                 <input
                   type="number"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   value={ploAnte}
                   onChange={(e) => setPloAnte(Number(e.target.value))}
                   className="mt-1 block w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-cream-parchment shadow-sm focus:border-whiskey-gold focus:outline-none focus:ring-1 focus:ring-whiskey-gold backdrop-blur-sm"
@@ -235,12 +229,6 @@ export default function Home() {
                   min={1}
                   required
                 />
-                <p
-                  className="mt-1 text-xs text-cigar-ash"
-                  style={{ fontFamily: "Lato, sans-serif" }}
-                >
-                  Ante-only bomb pot (big blind value is ante; small blind is 0)
-                </p>
               </div>
             )}
 
@@ -254,6 +242,8 @@ export default function Home() {
                 </label>
                 <input
                   type="number"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   value={minBuyIn}
                   onChange={(e) => setMinBuyIn(Number(e.target.value))}
                   className="mt-1 block w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-cream-parchment shadow-sm focus:border-whiskey-gold focus:outline-none focus:ring-1 focus:ring-whiskey-gold backdrop-blur-sm"
@@ -273,6 +263,8 @@ export default function Home() {
                 </label>
                 <input
                   type="number"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   value={maxBuyIn}
                   onChange={(e) => setMaxBuyIn(Number(e.target.value))}
                   className="mt-1 block w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-cream-parchment shadow-sm focus:border-whiskey-gold focus:outline-none focus:ring-1 focus:ring-whiskey-gold backdrop-blur-sm"

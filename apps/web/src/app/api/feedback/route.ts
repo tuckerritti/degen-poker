@@ -21,7 +21,10 @@ const normalizeText = (value: unknown, maxLength: number) => {
 
 const normalizeSubject = (value: unknown, maxLength: number) => {
   if (typeof value !== "string") return "";
-  return value.replace(/[\r\n]+/g, " ").trim().slice(0, maxLength);
+  return value
+    .replace(/[\r\n]+/g, " ")
+    .trim()
+    .slice(0, maxLength);
 };
 
 export async function POST(request: NextRequest) {
@@ -43,24 +46,31 @@ export async function POST(request: NextRequest) {
     if (!feedbackText) {
       return NextResponse.json(
         { error: "Feedback text is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
-    if (typeof feedback === "string" && feedback.trim().length > MAX_FEEDBACK_LENGTH) {
+    if (
+      typeof feedback === "string" &&
+      feedback.trim().length > MAX_FEEDBACK_LENGTH
+    ) {
       return NextResponse.json(
         { error: `Feedback must be ${MAX_FEEDBACK_LENGTH} characters or less` },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     const safeRoomId = normalizeText(roomId, MAX_ROOM_ID_LENGTH);
-    const safePlayerName = normalizeText(playerName, MAX_PLAYER_NAME_LENGTH) || "Anonymous";
+    const safePlayerName =
+      normalizeText(playerName, MAX_PLAYER_NAME_LENGTH) || "Anonymous";
     const safePlayerId = normalizeText(playerId, MAX_ROOM_ID_LENGTH);
     const safeAuthUserId = normalizeText(authUserId, MAX_ROOM_ID_LENGTH);
     const safeUserAgent = normalizeText(userAgent, MAX_USER_AGENT_LENGTH);
 
     const safeTimestamp = (() => {
-      if (typeof timestamp === "string" && !Number.isNaN(Date.parse(timestamp))) {
+      if (
+        typeof timestamp === "string" &&
+        !Number.isNaN(Date.parse(timestamp))
+      ) {
         return timestamp;
       }
       return new Date().toISOString();
@@ -76,7 +86,7 @@ export async function POST(request: NextRequest) {
       console.error("Missing Gmail configuration environment variables");
       return NextResponse.json(
         { error: "Email service not configured" },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -161,7 +171,7 @@ User Agent: ${safeUserAgent || "N/A"}
 
     return NextResponse.json(
       { success: true, messageId: info.messageId },
-      { status: 200 }
+      { status: 200 },
     );
   } catch (error) {
     console.error("Error sending feedback email:", error);
@@ -177,7 +187,7 @@ User Agent: ${safeUserAgent || "N/A"}
     if (error instanceof Error && error.message.includes("rate limit")) {
       return NextResponse.json(
         { error: "Rate limit exceeded. Please try again later." },
-        { status: 429 }
+        { status: 429 },
       );
     }
 
@@ -188,7 +198,7 @@ User Agent: ${safeUserAgent || "N/A"}
       process.env.NODE_ENV === "production"
         ? { error: "Failed to send feedback" }
         : { error: "Failed to send feedback", details: errorMessage },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

@@ -358,11 +358,14 @@ export function PokerTable({
               textAnchor="middle"
               fontSize="5"
               fontFamily="Cinzel, serif"
-              letterSpacing="0.25"
-              fill="#0b4120"
-              opacity="0.7"
+              letterSpacing="0.35"
+              fill="#f1d9a0"
+              stroke="#0b2d18"
+              strokeWidth="0.25"
+              paintOrder="stroke"
+              opacity="0.9"
             >
-              DEGENERATE
+              SHIELD LOGISTICS LLC
             </text>
           </svg>
         </div>
@@ -538,7 +541,7 @@ export function PokerTable({
               phase &&
               !player.has_folded &&
               !player.waiting_for_next_hand &&
-              (!isMobile || isMyPlayer) && (
+              (!isMobile || isMyPlayer || isIndianPoker) && (
                 <div
                   className={`absolute left-1/2 -translate-x-1/2 ${holeCardsOffsetClass} ${holeCardsZClass}`}
                 >
