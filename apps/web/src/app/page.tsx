@@ -14,33 +14,28 @@ interface GameModeConfig {
   id: GameMode;
   name: string;
   enabled: boolean;
-  description: string;
 }
 
 const GAME_MODES: GameModeConfig[] = [
   {
-    id: "double_board_bomb_pot_plo",
-    name: "Double Board Bomb Pot PLO",
-    enabled: true,
-    description: "4 hole cards, 2 boards, bomb pot antes",
-  },
-  {
     id: "texas_holdem",
     name: "Texas Hold'em",
     enabled: true,
-    description: "2 hole cards, 1 board, standard blinds",
+  },
+  {
+    id: "double_board_bomb_pot_plo",
+    name: "Double Board Bomb Pot PLO",
+    enabled: true,
   },
   {
     id: "indian_poker",
     name: "Indian Poker",
     enabled: true,
-    description: "1 card on forehead, bomb pot antes, high card wins",
   },
   {
     id: "game_mode_321",
-    name: "3-2-1 Bomb Pot",
+    name: "321",
     enabled: true,
-    description: "6 hole cards, 3 boards, partition cards after river",
   },
 ];
 
@@ -164,12 +159,6 @@ export default function Home() {
                 >
                   {mode.name}
                 </h3>
-                <p
-                  className="mt-1 text-xs text-cigar-ash"
-                  style={{ fontFamily: "Lato, sans-serif" }}
-                >
-                  {mode.description}
-                </p>
                 {!mode.enabled && (
                   <span className="mt-2 inline-block text-xs font-semibold text-cigar-ash">
                     COMING SOON
